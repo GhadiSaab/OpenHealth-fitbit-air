@@ -1,6 +1,16 @@
 [package]
-name="tauri-plugin-vault"
-version="0.1.0"
-edition="2024"
-[lib]
-path="src/lib.rs"
+name = "tauri-plugin-vault"
+description = "Minimal secret storage for Airspace: Android Keystore-backed AES-GCM on Android, memory-only elsewhere."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+links = "tauri-plugin-vault"
+
+[build-dependencies]
+tauri-plugin = { version = "2.7.2", features = ["build"] }
+
+[dependencies]
+tauri = "2.12.5"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

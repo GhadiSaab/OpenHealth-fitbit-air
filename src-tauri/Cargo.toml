@@ -1,4 +1,31 @@
 [package]
-name="airspace-tauri"
-version="0.1.0"
-edition="2024"
+name = "airspace-tauri"
+description = "Airspace native shell (Tauri 2): SQLite storage, secure key storage, native networking for the optional AI coach."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "airspace_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "airspace"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+airspace-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-haptics = "2.4.2"
+tauri-plugin-notification = "2.8.0"
+tauri-plugin-dialog = "2.8.4"
+tauri-plugin-fs = "2.7.1"
+tauri-plugin-vault = { path = "../crates/tauri-plugin-vault" }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+# rustls + ring + bundled Mozilla roots: no platform verifier setup needed on Android.
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }

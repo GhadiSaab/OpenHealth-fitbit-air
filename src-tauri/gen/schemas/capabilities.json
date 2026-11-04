@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Webview permissions. Storage, secrets, files and notifications are handled by the app's own Rust commands.","local":true,"windows":["main"],"permissions":["core:default","haptics:allow-impact-feedback"]}}
