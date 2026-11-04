@@ -85,8 +85,9 @@ node scripts/e2e-smoke.cjs
 
 ### Android debug APK
 
-Requirements: JDK 17, Android SDK (platform 36, build-tools 36), NDK 27 (`NDK_HOME` set), Rust Android targets, and
-the Tauri CLI.
+Requirements: JDK 17, Android SDK (platform 37), NDK 27 (`NDK_HOME` set), Rust Android targets, and the Tauri CLI.
+The Android Studio project is committed in `src-tauri/gen/android` (generated with `cargo tauri android init`, with
+launcher icons, backup exclusions and no TV launcher).
 
 ```bash
 rustup target add aarch64-linux-android x86_64-linux-android
@@ -104,9 +105,9 @@ cargo install tauri-cli --version 2.12.4 --locked
 cd src-tauri && cargo tauri android build --debug --apk --target aarch64 x86_64
 ```
 
-The APK is written under `src-tauri/gen/android/app/build/outputs/apk/`. `android-prepare.sh` generates the Android
-project (`cargo tauri android init`), installs the app icons and disables Android cloud backup so health data stays on
-the device. To run on a connected phone: `cargo tauri android dev`.
+The APK is written under `src-tauri/gen/android/app/build/outputs/apk/`. `android-prepare.sh` refreshes launcher icons
+and checks that Android backup stays disabled (cloud backup and device transfer are excluded via
+`res/xml/data_extraction_rules.xml`), so health data stays on the device. To run on a connected phone: `cargo tauri android dev`.
 
 ### CI workflows
 

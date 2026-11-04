@@ -20,7 +20,7 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Android NDK
         run: |
-          sdkmanager --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager --install "ndk;27.2.12479018" "platforms;android-37"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
