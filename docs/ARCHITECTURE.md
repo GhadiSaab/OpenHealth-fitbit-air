@@ -100,6 +100,15 @@ Intraday charts use `additive_increments`, which applies the same rules, so
 hourly bars add up to the daily total. Large intraday series are bucketed
 (min/max/avg); raw samples stay untouched in storage.
 
+## Statistics shown in Explore
+
+* Today's value for growing metrics (steps, distance, calories, heart rate, zone
+  minutes) is labelled "today so far" and left out of averages and comparisons.
+* Calorie statistics use the energy type reported by most days; days with a
+  different type (for example unspecified live values) are excluded and counted.
+* Heart rate and SpO₂ show the lowest and highest *readings*, not daily averages.
+* Month views overlay a 7-day rolling average (needs at least 4 days per window).
+
 ## Insights
 
 `insights::generate` produces only comparisons with sufficient coverage
@@ -108,7 +117,11 @@ coverage. There is no readiness/sleep/recovery score.
 
 ## AI
 
-`ai.rs` builds requests and parses responses; it contains no key. The
+`ai.rs` defines the `AiProvider` trait with two adapters (`AnthropicProvider`,
+`OpenAiCompatibleProvider`); it builds requests and parses responses and contains no key.
+On Android the stored key is bound to the endpoint it was entered for: the native
+`ai_request` command refuses any URL outside that endpoint, so even a compromised
+webview cannot send the key elsewhere. The
 platform layer sends them: Android via the `ai_request` command (key read
 from the vault in Rust, never visible to the webview, URL re-validated); the
 browser via `fetch` with a memory-only key. The consent screen shows the

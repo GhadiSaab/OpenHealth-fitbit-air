@@ -111,6 +111,16 @@ fn DayEditor() -> impl IntoView {
     let custom = RwSignal::new(String::new());
     Effect::new(move |_| {
         let d = app.day.get();
+        // Changing day with unsaved edits saves them rather than dropping them.
+        if dirty.get_untracked() {
+            let prev = draft.get_untracked();
+            spawn_local(async move {
+                match app.save_journal(prev.clone()).await {
+                    Ok(()) => app.notify(format!("Saved your entry for {}", time::parse_day(&prev.day).map(day_short).unwrap_or(prev.day.clone()))),
+                    Err(e) => app.error(format!("Couldn't save: {e}")),
+                }
+            });
+        }
         let e = app.journal.with_untracked(|j| j.iter().find(|e| e.day == time::day_key(d)).cloned()).unwrap_or_else(|| JournalEntry::new(d, platform::now_ms()));
         draft.set(e);
         dirty.set(false);
@@ -316,18 +326,27 @@ fn Associations() -> impl IntoView {
                     tags.iter().flat_map(|(t, _)| ASSOCIATION_METRICS.iter().filter_map(|(m, lag)| associate(&journal, idx, t, *m, *lag, from, today))).collect()
                 });
                 let insufficient: Vec<String> = tags.iter().filter(|(t, _)| !rows.iter().any(|a| &a.tag == t)).map(|(t, n)| format!("{t} ({n} day{})", if *n == 1 { "" } else { "s" })).collect();
+                // Show the clearest differences; summarise the rest in one line.
+                let small = |a: &airspace_core::journal::Association| {
+                    let d = a.diff().abs();
+                    match a.metric.canonical_unit() { Unit::Steps => d < 500.0, Unit::Minutes => d < 15.0, Unit::Bpm => d < 1.5, Unit::Milliseconds => d < 3.0, Unit::CelsiusDelta => d < 0.15, _ => true }
+                };
+                let rel = |a: &airspace_core::journal::Association| a.diff().abs() / a.other_mean.abs().max(1e-6);
+                let (mut notable, same): (Vec<_>, Vec<_>) = rows.into_iter().partition(|a| !small(a));
+                notable.sort_by(|a, b| rel(b).partial_cmp(&rel(a)).unwrap_or(std::cmp::Ordering::Equal));
+                let hidden = notable.len().saturating_sub(5);
+                notable.truncate(5);
+                let same_txt: Vec<String> = same.iter().map(|a| format!("{} and {}", a.tag, catalog::info(a.metric).short.to_lowercase())).collect();
                 view! {
+                    {notable.is_empty().then(|| view! { <p>"No clear differences between tagged and untagged days yet."</p> })}
                     <ul class="assoc-list">
-                        {rows.into_iter().map(|a| {
-                            let when = if a.lag_days == 1 { "the following night/day" } else { "the same day" };
+                        {notable.into_iter().map(|a| {
                             let fmtv = |v: f64| if a.metric == Metric::Sleep { time::fmt_minutes(v) } else { format::value(a.metric, v, &s) };
-                            let diff = a.diff();
-                            let unit_small = match a.metric.canonical_unit() { Unit::Steps => diff.abs() < 300.0, Unit::Minutes => diff.abs() < 10.0, Unit::Bpm => diff.abs() < 1.0, Unit::Milliseconds => diff.abs() < 2.0, Unit::CelsiusDelta => diff.abs() < 0.1, _ => false };
                             let name = catalog::info(a.metric).title;
-                            let text = match (unit_small, a.lag_days) {
-                                (true, _) => format!("{name} on {when} was about the same for days tagged “{}” ({}) as for other days ({}).", a.tag, fmtv(a.tagged_mean), fmtv(a.other_mean)),
-                                (false, 0) => format!("{name} averaged {} on days tagged “{}”, compared with {} on other days.", fmtv(a.tagged_mean), a.tag, fmtv(a.other_mean)),
-                                (false, _) => format!("{name} on {when} averaged {} after days tagged “{}”, compared with {} after other days.", fmtv(a.tagged_mean), a.tag, fmtv(a.other_mean)),
+                            let text = if a.lag_days == 0 {
+                                format!("{name} averaged {} on days tagged “{}”, compared with {} on other days.", fmtv(a.tagged_mean), a.tag, fmtv(a.other_mean))
+                            } else {
+                                format!("{name} the following night or day averaged {} after days tagged “{}”, compared with {} after other days.", fmtv(a.tagged_mean), a.tag, fmtv(a.other_mean))
                             };
                             let m = a.metric;
                             view! {
@@ -339,6 +358,8 @@ fn Associations() -> impl IntoView {
                             }
                         }).collect_view()}
                     </ul>
+                    {(hidden > 0).then(|| view! { <p class="muted">{format!("{hidden} smaller differences not shown.")}</p> })}
+                    {(!same_txt.is_empty()).then(|| view! { <p class="muted">{format!("About the same on tagged and untagged days: {}.", same_txt.join("; "))}</p> })}
                     {(!insufficient.is_empty()).then(|| view! {
                         <p class="muted">{format!("Not enough data yet for: {}. Comparisons need at least 3 tagged days and 5 other days with measurements.", insufficient.join(", "))}</p>
                     })}

@@ -31,22 +31,7 @@ pub struct Pt {
     pub future: bool,
 }
 
-pub fn nice_ticks(lo: f64, hi: f64, n: usize) -> Vec<f64> {
-    if !(hi > lo) {
-        return vec![lo];
-    }
-    let raw = (hi - lo) / n.max(1) as f64;
-    let mag = 10f64.powf(raw.log10().floor());
-    let step = [1.0, 2.0, 2.5, 5.0, 10.0].iter().map(|m| m * mag).find(|s| *s >= raw).unwrap_or(10.0 * mag);
-    let start = (lo / step).floor() * step;
-    let mut v = vec![];
-    let mut t = start;
-    while t <= hi + step * 0.001 {
-        v.push((t * 1e6).round() / 1e6);
-        t += step;
-    }
-    v
-}
+pub use airspace_core::series::nice_ticks;
 
 pub fn fmt_tick(v: f64) -> String {
     let a = v.abs();
@@ -61,6 +46,39 @@ pub fn fmt_tick(v: f64) -> String {
     } else {
         format!("{v:.1}")
     }
+}
+
+/// Path for an optional trend overlay (e.g. a 7-day rolling average),
+/// broken wherever the trend is undefined.
+fn trend_path(trend: &[Option<f64>], x: impl Fn(usize) -> f64, y: impl Fn(f64) -> f64) -> String {
+    let mut d = String::new();
+    let mut prev = false;
+    for (i, v) in trend.iter().enumerate() {
+        match v {
+            Some(v) => {
+                d.push_str(&format!("{}{:.1},{:.1}", if prev { "L" } else { "M" }, x(i), y(*v)));
+                prev = true;
+            }
+            None => prev = false,
+        }
+    }
+    d
+}
+
+/// A spoken summary of a chart's data for screen readers.
+pub fn summarize_pts(title: &str, pts: &[Pt]) -> String {
+    let with: Vec<&Pt> = pts.iter().filter(|p| p.v.is_some()).collect();
+    let past = pts.iter().filter(|p| !p.future).count();
+    if with.is_empty() {
+        return format!("{title}. No data recorded in this period.");
+    }
+    let lo = with.iter().min_by(|a, b| a.v.partial_cmp(&b.v).unwrap()).unwrap();
+    let hi = with.iter().max_by(|a, b| a.v.partial_cmp(&b.v).unwrap()).unwrap();
+    let last = with.last().unwrap();
+    format!(
+        "{title}. {} of {} entries have data. Lowest {} on {}; highest {} on {}; latest {} on {}. Use the arrow keys to hear each value, or open the table.",
+        with.len(), past, lo.text, lo.label, hi.text, hi.label, last.text, last.label
+    )
 }
 
 /// Shared keyboard handling for a chart with `n` points.
@@ -123,6 +141,7 @@ pub fn BarChart(
     tone: &'static str,
     #[prop(into)] title: String,
     #[prop(default = None)] goal: Option<f64>,
+    #[prop(default = None)] trend: Option<Vec<Option<f64>>>,
     #[prop(optional)] width: Option<f64>,
     #[prop(optional)] height: Option<f64>,
     #[prop(optional)] baseline_zero_label: Option<&'static str>,
@@ -131,13 +150,14 @@ pub fn BarChart(
     let h = height.unwrap_or(200.0);
     let (left, top, bottom) = (44.0, 12.0, 26.0);
     let n = pts.len();
-    let max = pts.iter().filter_map(|p| p.v).fold(goal.unwrap_or(0.0), f64::max).max(1e-9);
+    let max = pts.iter().filter_map(|p| p.v).chain(trend.iter().flatten().flatten().copied()).fold(goal.unwrap_or(0.0), f64::max).max(1.0);
     let ticks = nice_ticks(0.0, max, 3);
     let ymax = *ticks.last().unwrap_or(&max);
     let plot_h = h - top - bottom;
     let y = move |v: f64| top + plot_h - v / ymax * plot_h;
     let slot = (w - left) / n.max(1) as f64;
     let bw = (slot * 0.62).min(24.0).max(2.0);
+    let summary = summarize_pts(&title, &pts);
     let pts = Arc::new(pts);
     let sel = RwSignal::new(last_with_data(&pts));
     let label_every = ((n as f64) / 7.0).ceil().max(1.0) as usize;
@@ -189,6 +209,10 @@ pub fn BarChart(
         .filter(|(i, _)| (n - 1 - i) % label_every == 0)
         .map(|(i, p)| view! { <text x=format!("{:.1}", left + slot * (i as f64 + 0.5)) y=format!("{}", h - 6.0) class="tick" text-anchor="middle">{p.tick.clone()}</text> })
         .collect_view();
+    let trend_v = trend.as_ref().map(|t| {
+        let d = trend_path(t, |i| left + slot * (i as f64 + 0.5), y);
+        view! { <path d=d class="trend-line" /> }
+    });
     let goal_line = goal.filter(|g| *g <= ymax).map(|g| {
         let yy = y(g);
         view! {
@@ -210,9 +234,10 @@ pub fn BarChart(
                 viewBox=format!("0 0 {w} {h}")
                 width="100%"
                 class="chart-svg"
-                role="img"
+                role="application"
+                aria-roledescription="chart"
                 tabindex="0"
-                aria-label=format!("{title}. Use left and right arrow keys to inspect values.")
+                aria-label=summary.clone()
                 on:keydown=on_key(n, sel)
                 on:pointermove=move |ev| { if let Some(i) = pointer_index(&ev, w, left, n) { sel.set(Some(i)) } }
                 on:pointerdown=move |ev| { if let Some(i) = pointer_index(&ev, w, left, n) { sel.set(Some(i)) } }
@@ -220,6 +245,7 @@ pub fn BarChart(
                 {grid}
                 {cross}
                 {bars}
+                {trend_v}
                 {goal_line}
                 {xlabels}
             </svg>
@@ -237,6 +263,7 @@ pub fn LineChart(
     #[prop(optional)] width: Option<f64>,
     #[prop(optional)] height: Option<f64>,
     #[prop(optional)] deviation: bool,
+    #[prop(default = None)] trend: Option<Vec<Option<f64>>>,
 ) -> impl IntoView {
     let w = width.unwrap_or(640.0);
     let h = height.unwrap_or(200.0);
@@ -260,6 +287,7 @@ pub fn LineChart(
     let y = move |v: f64| top + plot_h - (v - ymin) / (ymax - ymin).max(1e-9) * plot_h;
     let slot = (w - left) / n.max(1) as f64;
     let xc = move |i: usize| left + slot * (i as f64 + 0.5);
+    let summary = summarize_pts(&title, &pts);
     let pts = Arc::new(pts);
     let sel = RwSignal::new(last_with_data(&pts));
     let label_every = ((n as f64) / 7.0).ceil().max(1.0) as usize;
@@ -283,6 +311,10 @@ pub fn LineChart(
         segs.push(cur);
     }
     let lines = segs.into_iter().map(|d| view! { <path d=d class=format!("line tone-{tone}") /> }).collect_view();
+    let trend_v = trend.as_ref().map(|t| {
+        let d = trend_path(t, xc, y);
+        view! { <path d=d class="trend-line" /> }
+    });
     let show_markers = n <= 62;
     let marks = pts
         .iter()
@@ -338,14 +370,16 @@ pub fn LineChart(
                 viewBox=format!("0 0 {w} {h}")
                 width="100%"
                 class="chart-svg"
-                role="img"
+                role="application"
+                aria-roledescription="chart"
                 tabindex="0"
-                aria-label=format!("{title}. Use left and right arrow keys to inspect values.")
+                aria-label=summary.clone()
                 on:keydown=on_key(n, sel)
                 on:pointermove=move |ev| { if let Some(i) = pointer_index(&ev, w, left, n) { sel.set(Some(i)) } }
                 on:pointerdown=move |ev| { if let Some(i) = pointer_index(&ev, w, left, n) { sel.set(Some(i)) } }
             >
                 {grid}
+                {trend_v}
                 {lines}
                 {marks}
                 {cross}
@@ -478,11 +512,16 @@ pub fn IntradayChart(
     };
     let xlabels = hour_labels
         .iter()
-        .map(|(t, l)| view! { <text x=format!("{:.1}", x(*t)) y=format!("{}", h - 6.0) class="tick" text-anchor="middle">{l.clone()}</text> })
+        .map(|(t, l)| {
+            let xx = x(*t);
+            let anchor = if xx > w - 20.0 { "end" } else if xx < left + 12.0 { "start" } else { "middle" };
+            view! { <text x=format!("{:.1}", xx) y=format!("{}", h - 6.0) class="tick" text-anchor=anchor>{l.clone()}</text> }
+        })
         .collect_view();
     let pts: Arc<Vec<Pt>> = Arc::new(
         buckets.iter().map(|b| Pt { label: b.label.clone(), tick: String::new(), v: Some(b.avg), lo: None, hi: None, text: b.text.clone(), note: None, future: false }).collect(),
     );
+    let summary = summarize_pts(&title, &pts);
     let sel = RwSignal::new(if n > 0 { Some(n - 1) } else { None });
     let bk = Arc::new(buckets);
     let bk2 = bk.clone();
@@ -514,9 +553,10 @@ pub fn IntradayChart(
                 viewBox=format!("0 0 {w} {h}")
                 width="100%"
                 class="chart-svg"
-                role="img"
+                role="application"
+                aria-roledescription="chart"
                 tabindex="0"
-                aria-label=format!("{title}. Use left and right arrow keys to inspect values.")
+                aria-label=summary.clone()
                 on:keydown=on_key(n, sel)
                 on:pointermove=pick
                 on:pointerdown=pick2
@@ -595,6 +635,7 @@ pub fn SleepTimeline(
             })
             .collect(),
     );
+    let summary = format!("{title}. {} stage intervals. Use the arrow keys to hear each one, or open the table.", n);
     let sel = RwSignal::new(None::<usize>);
     let s2 = segs.clone();
     let focus = move || {
@@ -621,9 +662,10 @@ pub fn SleepTimeline(
                 viewBox=format!("0 0 {w} {h}")
                 width="100%"
                 class="chart-svg"
-                role="img"
+                role="application"
+                aria-roledescription="chart"
                 tabindex="0"
-                aria-label=format!("{title}. Use left and right arrow keys to step through stages.")
+                aria-label=summary.clone()
                 on:keydown=on_key(n, sel)
                 on:pointerdown=pick
             >

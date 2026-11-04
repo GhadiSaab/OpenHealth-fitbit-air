@@ -14,6 +14,30 @@ Airspace is written entirely in **Rust**:
 | Android app | [Tauri 2](https://v2.tauri.app) shell, SQLite (`rusqlite`), native HTTPS (`ureq`) | `src-tauri/` |
 | Secret storage | Small Tauri plugin: Android Keystore AES-GCM | `crates/tauri-plugin-vault` |
 
+## Screenshots
+
+All screenshots come from the PWA build running the deterministic demo dataset (regenerate them with
+`node scripts/screenshots.cjs`). The AI answer comes from a local mock provider, not a real model.
+
+<table>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/01-onboarding.png" width="250" alt="Onboarding: demo, import, or set up later"><br><sub>Onboarding: demo, import, or set up later</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/02-today.png" width="250" alt="Today: summary, steps goal, heart rate with freshness, sleep"><br><sub>Today: summary, steps goal, heart rate with freshness, sleep</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/03-today-trends.png" width="250" alt="Today: distance, calories, trends, favorites"><br><sub>Today: distance, calories, trends, favorites</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/04-status-sheet.png" width="250" alt="Connection and freshness explained on tap"><br><sub>Connection and freshness explained on tap</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/05-explore.png" width="250" alt="Explore: all ten metric groups"><br><sub>Explore: all ten metric groups</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/06-heart-rate-day.png" width="250" alt="Intraday heart rate with min–max band and recording gap"><br><sub>Intraday heart rate with min–max band and recording gap</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/07-steps-month.png" width="250" alt="Steps month: goal line, 7-day average, no-data markers"><br><sub>Steps month: goal line, 7-day average, no-data markers</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/08-steps-calendar.png" width="250" alt="Steps calendar history and weekly consistency"><br><sub>Steps calendar history and weekly consistency</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/09-sleep-day.png" width="250" alt="Sleep stage timeline with measured vs calculated totals"><br><sub>Sleep stage timeline with measured vs calculated totals</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/10-hrv-month.png" width="250" alt="HRV with the measurement method preserved"><br><sub>HRV with the measurement method preserved</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/11-skin-temperature.png" width="250" alt="Skin temperature as a deviation, never core temperature"><br><sub>Skin temperature as a deviation, never core temperature</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/12-provenance-sheet.png" width="250" alt="Provenance on tap, down to each stored record"><br><sub>Provenance on tap, down to each stored record</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/13-journal.png" width="250" alt="Journal: calendar, notes and tags"><br><sub>Journal: calendar, notes and tags</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/14-journal-associations.png" width="250" alt="Goals, opt-in reminders, cautious tag comparisons"><br><sub>Goals, opt-in reminders, cautious tag comparisons</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/15-coach-insights.png" width="250" alt="Local insights with windows and coverage (no AI)"><br><sub>Local insights with windows and coverage (no AI)</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/16-ai-settings.png" width="250" alt="Bring-your-own-key AI provider settings"><br><sub>Bring-your-own-key AI provider settings</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/17-ai-consent.png" width="250" alt="Consent: dates, per-metric toggles, exact data shown"><br><sub>Consent: dates, per-metric toggles, exact data shown</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/18-ai-answer.png" width="250" alt="AI answers are labelled and kept distinct"><br><sub>AI answers are labelled and kept distinct</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/19-profile.png" width="250" alt="Profile and device entry"><br><sub>Profile and device entry</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/20-device.png" width="250" alt="Device: honest Not connected status, prepared states"><br><sub>Device: honest Not connected status, prepared states</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/21-data.png" width="250" alt="Data: demo vs personal, import, export, delete"><br><sub>Data: demo vs personal, import, export, delete</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/22-import-preview.png" width="250" alt="Import preview with counts, rejections, duplicates"><br><sub>Import preview with counts, rejections, duplicates</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/23-settings.png" width="250" alt="Settings: theme, units, time zone, motion"><br><sub>Settings: theme, units, time zone, motion</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/24-today-dark.png" width="250" alt="Dark theme"><br><sub>Dark theme</sub></td></tr>
+<tr><td align="center" valign="top" width="33%"><img src="docs/screenshots/25-heart-rate-dark.png" width="250" alt="Dark theme chart"><br><sub>Dark theme chart</sub></td><td align="center" valign="top" width="33%"><img src="docs/screenshots/28-empty.png" width="250" alt="Usable with a completely empty database"><br><sub>Usable with a completely empty database</sub></td></tr>
+</table>
+
+**Desktop (responsive layout with a side rail)**
+
+<p align="center">
+<img src="docs/screenshots/26-desktop-dark.png" width="820" alt="Today on desktop, dark theme"><br>
+<img src="docs/screenshots/27-desktop-steps.png" width="820" alt="Steps month view on desktop, light theme">
+</p>
+
 ## What works, what's simulated, what's deferred
 
 | Area | Status |
@@ -35,16 +59,27 @@ No feature pretends to work: unavailable adapters say what is missing.
 
 ## Verification status
 
-* `cargo test -p airspace-core -p airspace-tauri`: 50 tests pass (aggregation, cumulative counters, overlap handling,
-  DST and overnight sleep, import validation, duplicates and conflicts, backup secrecy, SQLite migrations and persistence).
-* `scripts/e2e-smoke.cjs` drives the PWA build in headless Chromium and passes, covering: onboarding; empty database; demo;
-  persistence across reload; charts with keyboard inspection and table view; journal; Coach without AI; API key not
-  stored or exported; backup export; import preview with rejected records; re-import detected as duplicates; dark theme;
-  no console errors.
-* **The Android APK was not built or verified in this environment.** The Android SDK download host is blocked by the
-  sandbox's network policy. The Android Rust code for the Keystore plugin type-checks for `aarch64-linux-android`; the
-  rest is verified only on desktop targets. A GitHub Actions workflow that builds the debug APK is provided in
-  `ci/github-workflows/android.yml` (see below).
+* **Rust tests** (`cargo test -p airspace-core -p airspace-tauri`): 53 pass. They cover:
+  * aggregation, cumulative counters and resets, and overlap between imported history and live data;
+  * daylight-saving days and overnight sleep;
+  * import validation, duplicates and conflicts;
+  * backup secrecy and CSV export;
+  * AI request shapes and endpoint binding;
+  * SQLite migrations and persistence after reopening;
+  * a year of per-minute heart rate (about 525,000 samples), which summarizes in about 130 ms in release.
+* **Browser test** (`scripts/e2e-smoke.cjs`) drives the PWA in headless Chromium. It passes, covering:
+  * onboarding, offline reload after the first visit, an empty database, the demo, and persistence across reload;
+  * charts with keyboard inspection and table view, and the journal;
+  * Coach without AI, and the full AI flow against a local mock provider: connection test, consent, an excluded metric
+    staying out, compact summaries only, the key never stored or put in a URL, and the answer labelled;
+  * backup export with no key in it, import preview with rejected records, and re-import detected as duplicates;
+  * dark theme, and no console errors.
+* **The Android APK was not built or verified in this environment**, because the sandbox's network policy blocks the
+  Android SDK download host.
+  * The Android Studio project is committed in `src-tauri/gen/android`.
+  * The Rust side of the Keystore plugin type-checks for `aarch64-linux-android`.
+  * Reminders, haptics and the Kotlin vault have not been compiled or run on a device.
+  * `ci/github-workflows/android.yml` builds the debug APK on GitHub's runners; see below.
 
 ## Build and run
 
@@ -122,8 +157,8 @@ mkdir -p .github/workflows && git mv ci/github-workflows/*.yml .github/workflows
 ## Privacy and security
 
 * No accounts, analytics, ads or tracking SDKs. No network requests except the ones you trigger to your AI provider.
-* AI keys: Android stores them encrypted with an Android Keystore key and uses them only in native code. In the browser
-  they live in memory only. Keys never appear in URLs, logs, `localStorage`, backups or the service worker cache.
+* AI keys: Android stores them encrypted with an Android Keystore key, binds them to the endpoint they were entered
+  for, and uses them only in native code. In the browser they live in memory only. Keys never appear in URLs, logs, `localStorage`, backups or the service worker cache.
 * Before any AI request you see the exact dates, metrics and JSON to be shared; only daily summaries are sent.
 * Android cloud backup is disabled for the app; use Airspace's own backup export.
 

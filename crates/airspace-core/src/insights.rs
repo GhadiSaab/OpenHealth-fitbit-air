@@ -131,6 +131,8 @@ pub fn generate(idx: &SummaryIndex, today: NaiveDate, tz: &Tz, s: &Settings) -> 
 
     // Week-over-week comparisons for activity and sleep duration.
     for metric in [Metric::Steps, Metric::Sleep] {
+        // Today's step count is still growing: compare complete days only.
+        let (w7, p7) = if metric.is_additive() { ((w7.0 - Duration::days(1), w7.1 - Duration::days(1)), (p7.0 - Duration::days(1), p7.1 - Duration::days(1))) } else { (w7, p7) };
         let c = compare_periods(idx, metric, w7.0, w7.1);
         if c.current_days >= 5 && c.previous_days >= 5 {
             let (cur, prev) = (c.current.unwrap(), c.previous.unwrap());
@@ -235,7 +237,7 @@ pub fn generate(idx: &SummaryIndex, today: NaiveDate, tz: &Tz, s: &Settings) -> 
     }
 
     // Activity consistency: days at or above the step goal.
-    let series = idx.series(Metric::Steps, w14.0, w14.1);
+    let series = idx.series(Metric::Steps, w14.0, w14.1 - Duration::days(1));
     let with: Vec<f64> = series.iter().filter_map(|(_, v)| *v).collect();
     if with.len() >= 7 {
         let met = with.iter().filter(|v| **v >= s.step_goal as f64).count();
@@ -244,7 +246,7 @@ pub fn generate(idx: &SummaryIndex, today: NaiveDate, tz: &Tz, s: &Settings) -> 
             metric: Metric::Steps,
             title: "Step goal consistency".into(),
             body: format!(
-                "You reached {} steps on {met} of the {} days with step data in the last two weeks.",
+                "You reached {} steps on {met} of the {} complete days with step data in the last two weeks.",
                 fmt(Metric::Steps, s.step_goal as f64, s).replace(" steps", ""),
                 with.len()
             ),

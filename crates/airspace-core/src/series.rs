@@ -131,6 +131,19 @@ pub fn choose_width(from: i64, to: i64, target: i64, data_interval: Option<i64>)
     STEPS.into_iter().find(|s| *s >= raw && *s >= min).unwrap_or(*STEPS.last().unwrap())
 }
 
+/// "Nice" axis ticks that always enclose `[lo, hi]`: the first tick is ≤ lo
+/// and the last is ≥ hi, so marks never extend past the axis.
+pub fn nice_ticks(lo: f64, hi: f64, n: usize) -> Vec<f64> {
+    let (lo, hi) = if hi > lo { (lo, hi) } else { (lo - 1.0, lo + 1.0) };
+    let raw = (hi - lo) / n.max(1) as f64;
+    let mag = 10f64.powf(raw.log10().floor());
+    let step = [1.0, 2.0, 2.5, 5.0, 10.0].iter().map(|m| m * mag).find(|s| *s >= raw * 0.999).unwrap_or(10.0 * mag);
+    let start = (lo / step).floor() * step;
+    let end = (hi / step).ceil() * step;
+    let k = ((end - start) / step).round() as usize;
+    (0..=k).map(|i| ((start + i as f64 * step) * 1e6).round() / 1e6).collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Stats {
     pub min: Option<f64>,
@@ -180,6 +193,16 @@ mod tests {
 
     fn pts(ts: &[i64]) -> Vec<Point> {
         ts.iter().map(|t| Point { t: *t, v: 1.0 }).collect()
+    }
+
+    #[test]
+    fn ticks_always_enclose_the_data() {
+        for (lo, hi) in [(0.0, 1.79), (0.0, 10_400.0), (41.0, 161.0), (0.0, 0.0), (-0.7, 0.9), (93.0, 99.0), (0.0, 7.6)] {
+            let t = nice_ticks(lo, hi, 3);
+            assert!(t.len() >= 2, "{lo} {hi} {t:?}");
+            assert!(*t.first().unwrap() <= lo && *t.last().unwrap() >= hi, "{lo} {hi} {t:?}");
+            assert!(t.len() <= 8, "{t:?}");
+        }
     }
 
     #[test]

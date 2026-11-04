@@ -43,13 +43,14 @@ Columns:
 | Column | Meaning |
 |---|---|
 | `id` | Airspace content id |
-| `metric`, `kind`, `unit` | as in the model |
+| `metric`, `kind`, `unit` | as in the model (snake_case, e.g. `cumulative_counter`) |
 | `start_utc`, `end_utc` | ISO 8601 UTC |
 | `local_day` | day the record is counted on |
 | `utc_offset_min` | original offset, when known |
 | `value` | canonical unit |
-| `origin`, `status`, `source`, `device`, `original_id` | provenance |
-| `provisional`, `confidence`, `superseded_by` | quality |
+| `origin`, `status` | provenance enums, e.g. `history_import`, `bluetooth_live`; `imported`, `measured` |
+| `source`, `device`, `original_id`, `batch_id`, `ingested_utc` | where and when it entered Airspace |
+| `provisional`, `confidence`, `coverage`, `calc_version`, `superseded_by` | quality |
 | `detail` | metric-specific JSON (sleep stages, HRV method, zone bounds, …) |
 
 Text that starts with `=`, `+`, `-` or `@` is prefixed with `'` to prevent

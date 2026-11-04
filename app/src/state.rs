@@ -478,7 +478,14 @@ impl App {
         let new: Vec<Measurement> = b.measurements.into_iter().filter(|m| !existing.contains(&m.id)).collect();
         let n = new.len();
         repo::put_measurements(k, &new).await?;
-        repo::put_journal(k, &b.journal).await?;
+        // Merging never replaces a journal entry you already have for that day.
+        let journal: Vec<JournalEntry> = if replace {
+            b.journal
+        } else {
+            let have: HashSet<String> = repo::journal(k).await?.into_iter().map(|e| e.day).collect();
+            b.journal.into_iter().filter(|e| !have.contains(&e.day)).collect()
+        };
+        repo::put_journal(k, &journal).await?;
         for batch in &b.batches {
             repo::put_batch(k, batch).await?;
         }

@@ -177,6 +177,7 @@ fn StepsHero() -> impl IntoView {
                     }.into_any(),
                 }
             }}
+            <MiniWeek />
         </button>
     }
 }
@@ -407,5 +408,31 @@ fn FavoriteTiles() -> impl IntoView {
                 }).collect_view()}
             </div>
         }.into_any()
+    }
+}
+
+/// Last 7 days of steps (wide screens only). Days without data are flat.
+#[component]
+fn MiniWeek() -> impl IntoView {
+    let app = use_app();
+    move || {
+        let day = app.day.get();
+        let goal = app.settings.with(|s| s.step_goal as f64);
+        let vals: Vec<(chrono::NaiveDate, Option<f64>)> = app.summaries.with(|i| i.series(Metric::Steps, day - Duration::days(6), day));
+        let max = vals.iter().filter_map(|(_, v)| *v).fold(goal, f64::max).max(1.0);
+        view! {
+            <div class="mini-bars" aria-hidden="true">
+                <span class="mini-caption">"Last 7 days"</span>
+                {vals.into_iter().map(|(d, v)| {
+                    let h = v.map(|v| (v / max * 72.0).max(2.0)).unwrap_or(2.0);
+                    view! {
+                        <span class="mini-bar" class:none=v.is_none() class:today={d == day}>
+                            <span style=format!("height:{h:.0}px")></span>
+                            <small>{d.format("%a").to_string().chars().next().unwrap_or(' ').to_string()}</small>
+                        </span>
+                    }
+                }).collect_view()}
+            </div>
+        }
     }
 }

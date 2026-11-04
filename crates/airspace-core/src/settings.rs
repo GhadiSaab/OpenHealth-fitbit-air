@@ -150,8 +150,9 @@ pub fn display(metric: Metric, value: f64, s: &Settings) -> Display {
                 // A temperature *difference* converts with 9/5 and no offset.
                 TempUnit::Fahrenheit => (value * 9.0 / 5.0, "°F"),
             };
-            let sign = if v > 0.005 { "+" } else if v < -0.005 { "−" } else { "±" };
-            Display { number: format!("{sign}{:.1}", v.abs()), unit: u.into() }
+            let r = (v * 10.0).round() / 10.0;
+            let sign = if r > 0.0 { "+" } else if r < 0.0 { "−" } else { "±" };
+            Display { number: format!("{sign}{:.1}", r.abs()), unit: u.into() }
         }
         Unit::BreathsPerMinute => Display { number: format!("{:.1}", value), unit: "br/min".into() },
     }
@@ -205,6 +206,7 @@ mod tests {
         assert_eq!(display(Metric::SkinTemperature, 1.0, &s).joined(), "+1.8 °F");
         s.temperature = TempUnit::Celsius;
         assert_eq!(display(Metric::SkinTemperature, -0.4, &s).joined(), "−0.4 °C");
+        assert_eq!(display(Metric::SkinTemperature, -0.04, &s).joined(), "±0.0 °C");
     }
 
     #[test]

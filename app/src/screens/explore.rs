@@ -11,7 +11,7 @@ use airspace_core::insights::{circular_mean_minutes, fmt_clock, wrap_diff};
 use airspace_core::series::{self, Point, std_dev};
 use airspace_core::settings::{display_scale, display_unit};
 use airspace_core::time::{self, HOUR_MS, MINUTE_MS};
-use airspace_core::{Measurement, Metric, Origin, SleepStage};
+use airspace_core::{CalorieScope, Measurement, Metric, Origin, SleepStage};
 use chrono::{Datelike, Duration, NaiveDate};
 use leptos::prelude::*;
 use std::collections::BTreeMap;
@@ -27,7 +27,7 @@ pub fn Explore() -> impl IntoView {
         <ul class="group-list">
             {Group::ALL.into_iter().map(|g| view! {
                 <li class="group-card">
-                    <h2 class="group-title">{g.title()}</h2>
+                    {(g.metrics().len() > 1).then(|| view! { <h2 class="group-title">{g.title()}</h2> })}
                     {g.metrics().iter().map(|m| {
                         let m = *m;
                         let info = catalog::info(m);
@@ -36,7 +36,7 @@ pub fn Explore() -> impl IntoView {
                                 app.go(Route::Metric(m, if info.has_intraday { Range::Day } else { Range::Week }))
                             }>
                                 <span class="metric-icon"><Icon name=metric_icon(m) /></span>
-                                <span class="metric-name">{info.title}</span>
+                                <span class="metric-name">{if g.metrics().len() > 1 { info.title } else { g.title() }}</span>
                                 {move || {
                                     let today = app.today();
                                     let s = app.settings.get();
@@ -196,6 +196,14 @@ fn pts_for_days(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Ve
                 if sm.map(|x| x.provisional).unwrap_or(false) {
                     note.push("includes provisional values".into());
                 }
+                if d == today && partial_today(metric) && v.is_some() {
+                    note.push("today so far — not a complete day".into());
+                }
+                if metric == Metric::Calories {
+                    if let Some(CalorieScope::Unspecified) = sm.and_then(calorie_scope) {
+                        note.push("source doesn't say total or active".into());
+                    }
+                }
                 let text = match (metric, v, sm) {
                     (Metric::HeartRate, Some(v), Some(x)) => format!("avg {} · {}–{}", format::value(metric, v, &s), x.min.unwrap_or(v).round(), x.max.unwrap_or(v).round()),
                     (Metric::Spo2, Some(v), Some(x)) => format!("{} (range {:.0}–{:.0}%)", format::value(metric, v, &s), x.min.unwrap_or(v), x.max.unwrap_or(v)),
@@ -257,18 +265,42 @@ fn PeriodView(metric: Metric, range: Range, from: NaiveDate, to: NaiveDate, show
     };
     let title = format!("{} for {}", info.title, period_label(range, from, to));
     let pts = move || if range == Range::Year { pts_for_year(&app, metric, from, to) } else { pts_for_days(&app, metric, from, to) };
+    // 7-day rolling average (needs at least 4 days with data in each window).
+    let trend = move || {
+        (range == Range::Month).then(|| {
+            let s = app.settings.get();
+            let today = app.today();
+            let vals: Vec<Option<f64>> = app.summaries.with(|i| {
+                i.series(metric, from - Duration::days(6), to)
+                    .into_iter()
+                    .map(|(d, v)| if d > today || (d == today && partial_today(metric)) { None } else { v.map(|v| display_scale(metric, v, &s)) })
+                    .collect()
+            });
+            let r = series::rolling_mean(&vals, 7, 4);
+            let mut out: Vec<Option<f64>> = r[6..].to_vec();
+            for (i, d) in time::days_inclusive(from, to).enumerate() {
+                if d > today {
+                    out[i] = None;
+                }
+            }
+            out
+        })
+    };
     view! {
         {move || {
             let p = pts();
             let t = title.clone();
+            let tr = trend();
             match info.daily_chart {
-                DailyChart::Bars => view! { <BarChart pts=p tone=tone title=t goal=goal() width=width() /> }.into_any(),
-                DailyChart::Line | DailyChart::RangeLine => view! { <LineChart pts=p tone=tone title=t width=width() /> }.into_any(),
-                DailyChart::Deviation => view! { <LineChart pts=p tone=tone title=t width=width() deviation=true /> }.into_any(),
+                DailyChart::Bars => view! { <BarChart pts=p tone=tone title=t goal=goal() width=width() trend=tr /> }.into_any(),
+                DailyChart::Line | DailyChart::RangeLine => view! { <LineChart pts=p tone=tone title=t width=width() trend=tr /> }.into_any(),
+                DailyChart::Deviation => view! { <LineChart pts=p tone=tone title=t width=width() deviation=true trend=tr /> }.into_any(),
             }
         }}
         <div class="chart-foot">
-            <span class="muted">{move || format!("Values in {}. Dots on the baseline mark days with no data.", display_unit(metric, &app.settings.get()))}</span>
+            <span class="muted">{move || format!("Values in {}. Dots on the baseline mark days with no data.", display_unit(metric, &app.settings.get()))}
+                {(range == Range::Month).then(|| view! { " " <span class="legend-trend">"7-day average"</span> })}
+            </span>
             <button class="link" aria-expanded=move || if show_table.get() { "true" } else { "false" } on:click=move |_| show_table.update(|v| *v = !*v)>
                 <Icon name="table" size=18 />{move || if show_table.get() { "Hide table" } else { "Show table" }}
             </button>
@@ -503,60 +535,177 @@ fn sleep_day(app: &App, ms: &Arc<Vec<Measurement>>, width: f64, show: RwSignal<b
     .into_any()
 }
 
+/// Metrics whose value for today keeps growing until the day ends.
+fn partial_today(metric: Metric) -> bool {
+    metric.is_additive() || matches!(metric, Metric::HeartRate | Metric::HeartRateZones)
+}
+
+fn calorie_scope(sm: &airspace_core::aggregate::DaySummary) -> Option<CalorieScope> {
+    match &sm.extra {
+        Some(SummaryExtra::Additive { calorie_scope, .. }) => *calorie_scope,
+        _ => None,
+    }
+}
+
+/// Daily values for statistics: excludes future days, today's incomplete
+/// value for growing metrics, and (for calories) days whose energy type
+/// differs from `scope`. Returns (values, mins, maxes, excluded_today, excluded_scope).
+fn stat_values(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate, scope: Option<CalorieScope>) -> (Vec<f64>, Vec<f64>, Vec<f64>, bool, usize) {
+    let today = app.today();
+    let (mut v, mut lo, mut hi, mut ex_today, mut ex_scope) = (vec![], vec![], vec![], false, 0);
+    app.summaries.with(|i| {
+        for d in time::days_inclusive(from, to.min(today)) {
+            let Some(sm) = i.get(metric, d) else { continue };
+            let Some(val) = sm.value else { continue };
+            if d == today && partial_today(metric) {
+                ex_today = true;
+                continue;
+            }
+            if metric == Metric::Calories && scope.is_some() && calorie_scope(sm) != scope {
+                ex_scope += 1;
+                continue;
+            }
+            v.push(val);
+            lo.push(sm.min.unwrap_or(val));
+            hi.push(sm.max.unwrap_or(val));
+        }
+    });
+    (v, lo, hi, ex_today, ex_scope)
+}
+
+/// The calorie type used by most days in a period.
+fn majority_scope(app: &App, from: NaiveDate, to: NaiveDate) -> Option<CalorieScope> {
+    let mut counts: Vec<(CalorieScope, usize)> = vec![];
+    app.summaries.with(|i| {
+        for d in time::days_inclusive(from, to) {
+            if let Some(sc) = i.get(Metric::Calories, d).and_then(calorie_scope) {
+                match counts.iter_mut().find(|(k, _)| *k == sc) {
+                    Some((_, n)) => *n += 1,
+                    None => counts.push((sc, 1)),
+                }
+            }
+        }
+    });
+    counts.into_iter().max_by_key(|(_, n)| *n).map(|(k, _)| k)
+}
+
 #[component]
 fn PeriodStats(metric: Metric, range: Range) -> impl IntoView {
     let app = use_app();
     move || {
-        let (from, to) = period(range, app.day.get());
-        let len = (to - from).num_days() + 1;
-        let (pfrom, pto) = (from - Duration::days(len), from - Duration::days(1));
+        let anchor = app.day.get();
         let s = app.settings.get();
-        let (cur, prev) = app.summaries.with(|i| {
-            let c: Vec<f64> = i.series(metric, from, to).into_iter().filter_map(|(_, v)| v).collect();
-            let p: Vec<f64> = i.series(metric, pfrom, pto).into_iter().filter_map(|(_, v)| v).collect();
-            (c, p)
-        });
         let today = app.today();
-        let elapsed = (to.min(today) - from).num_days() + 1;
-        let st = series::stats(cur.iter().copied());
-        let pst = series::stats(prev.iter().copied());
         let s2 = s.clone();
         let fmt = move |v: f64| if metric == Metric::Sleep { time::fmt_minutes(v) } else { format::value(metric, v, &s2) };
+        if range == Range::Day {
+            return day_stats(&app, metric, anchor, today, &fmt).into_any();
+        }
+        let (from, to) = period(range, anchor);
+        let len = (to - from).num_days() + 1;
+        let (pfrom, pto) = (from - Duration::days(len), from - Duration::days(1));
+        let scope = if metric == Metric::Calories { majority_scope(&app, from, to) } else { None };
+        let (cur, lows, highs, ex_today, ex_scope) = stat_values(&app, metric, from, to, scope);
+        let (prev, _, _, _, _) = stat_values(&app, metric, pfrom, pto, scope);
+        let complete_days = ((to.min(today) - from).num_days() + 1 - if ex_today { 1 } else { 0 }).max(0);
+        let st = series::stats(cur.iter().copied());
+        let pst = series::stats(prev.iter().copied());
         let avg_label = if metric.is_additive() || metric == Metric::Sleep { "Daily average" } else { "Average" };
-        let reliable = (st.n as i64) * 2 >= elapsed.max(1) && (pst.n as i64) * 2 >= len && st.n > 0;
+        let reliable = (st.n as i64) * 2 >= complete_days.max(1) && (pst.n as i64) * 2 >= len && st.n > 0;
         let label = match range { Range::Day => "previous day", Range::Week => "previous week", Range::Month => "previous month", Range::Year => "previous year" };
         let cmp = match (st.mean, pst.mean, reliable) {
-            (Some(a), Some(b), true) => format!("{} vs {label} ({}).", format::delta(metric, a - b, &s), fmt(b)),
+            (Some(a), Some(b), true) => format!("{} per day vs the {label} ({}).", format::delta(metric, a - b, &s), fmt(b)),
             (Some(_), _, _) => format!("Not enough data to compare with the {label}."),
             _ => String::new(),
         };
-        if range == Range::Day {
-            return view! {}.into_any();
+        let readings = matches!(metric, Metric::HeartRate | Metric::Spo2);
+        let (min_label, max_label) = if readings { ("Lowest reading", "Highest reading") } else { ("Lowest day", "Highest day") };
+        let min_v = if readings { lows.iter().cloned().reduce(f64::min) } else { st.min };
+        let max_v = if readings { highs.iter().cloned().reduce(f64::max) } else { st.max };
+        let mut notes = vec![];
+        if ex_today {
+            notes.push("Today is left out of averages and comparisons until the day is complete.".to_string());
+        }
+        if ex_scope > 0 {
+            notes.push(format!("{ex_scope} day(s) report a different calorie type (for example live values that don't say whether they are total or active) and are left out."));
         }
         view! {
             <Section title="Summary">
                 {if st.n == 0 {
-                    view! { <p class="muted">"No data in this period."</p> }.into_any()
+                    view! { <p class="muted">{if ex_today { "Only today's incomplete data is in this period so far." } else { "No data in this period." }}</p> }.into_any()
                 } else {
                     view! {
                         <dl class="stat-grid">
-                            <div><dt>{avg_label}</dt><dd class="tabular">{st.mean.map(|v| fmt(v)).unwrap_or_default()}</dd></div>
-                            <div><dt>"Lowest day"</dt><dd class="tabular">{st.min.map(|v| fmt(v)).unwrap_or_default()}</dd></div>
-                            <div><dt>"Highest day"</dt><dd class="tabular">{st.max.map(|v| fmt(v)).unwrap_or_default()}</dd></div>
-                            {metric.is_additive().then(|| view! { <div><dt>"Total"</dt><dd class="tabular">{fmt(st.sum)}</dd></div> })}
-                            <div><dt>"Days with data"</dt><dd class="tabular">{format!("{} of {}", st.n, elapsed.max(0))}</dd></div>
+                            <div><dt>{if readings { "Average of daily averages" } else { avg_label }}</dt><dd class="tabular">{st.mean.map(|v| fmt(v)).unwrap_or_default()}</dd></div>
+                            <div><dt>{min_label}</dt><dd class="tabular">{min_v.map(|v| fmt(v)).unwrap_or_default()}</dd></div>
+                            <div><dt>{max_label}</dt><dd class="tabular">{max_v.map(|v| fmt(v)).unwrap_or_default()}</dd></div>
+                            {metric.is_additive().then(|| view! { <div><dt>"Total (complete days)"</dt><dd class="tabular">{fmt(st.sum)}</dd></div> })}
+                            <div><dt>"Days with data"</dt><dd class="tabular">{format!("{} of {}", st.n, complete_days)}</dd></div>
                         </dl>
-                        <p class="compare">{cmp}<span class="muted">{format!(" Coverage: {} of {} days this period, {} of {} before.", st.n, elapsed.max(0), pst.n, len)}</span></p>
+                        <p class="compare">{cmp}<span class="muted">{format!(" Coverage: {} of {} days this period, {} of {} before.", st.n, complete_days, pst.n, len)}</span></p>
                         {(metric == Metric::Steps).then(|| {
                             let goal = s.step_goal as f64;
                             let met = cur.iter().filter(|v| **v >= goal).count();
                             view! { <p class="muted">{format!("Goal reached on {met} of {} recorded days.", cur.len())}</p> }
                         })}
+                        {(metric == Metric::Calories).then(|| view! { <p class="muted">{match scope {
+                            Some(CalorieScope::Total) => "Statistics use total calories (including resting energy), as reported by the source.",
+                            Some(CalorieScope::Active) => "Statistics use active calories only, as reported by the source.",
+                            _ => "The source doesn't say whether these are total or active calories.",
+                        }}</p> })}
+                        {notes.into_iter().map(|n| view! { <p class="muted">{n}</p> }).collect_view()}
                     }.into_any()
                 }}
             </Section>
         }.into_any()
     }
+}
+
+/// Statistics for a single day, with the previous day and the prior week.
+fn day_stats(app: &App, metric: Metric, day: NaiveDate, today: NaiveDate, fmt: &dyn Fn(f64) -> String) -> impl IntoView {
+    let s = app.settings.get_untracked();
+    let (cur, prev) = app.summaries.with_untracked(|i| (i.get(metric, day).cloned(), i.get(metric, day - Duration::days(1)).cloned()));
+    let week: Vec<f64> = app.summaries.with_untracked(|i| i.series(metric, day - Duration::days(7), day - Duration::days(1)).into_iter().filter_map(|(_, v)| v).collect());
+    let partial = day == today && partial_today(metric);
+    let noun = if metric == Metric::Sleep { "night" } else { "day" };
+    let Some(cur) = cur.filter(|c| c.value.is_some()) else {
+        return view! { <Section title="Summary"><p class="muted">"No data for this day."</p></Section> }.into_any();
+    };
+    let v = cur.value.unwrap();
+    let main_label = match metric {
+        Metric::HeartRate => "Average",
+        Metric::Sleep => "Time asleep",
+        _ if partial => "So far today",
+        _ => "Total",
+    };
+    let cmp_prev = prev.and_then(|p| p.value).map(|p| {
+        if partial {
+            format!("Yesterday's full-day value was {}; today isn't complete yet.", fmt(p))
+        } else {
+            format!("{} vs the previous {noun} ({}).", format::delta(metric, v - p, &s), fmt(p))
+        }
+    });
+    let cmp_week = (week.len() >= 4 && !partial).then(|| {
+        let m = week.iter().sum::<f64>() / week.len() as f64;
+        format!("{} vs your average over the previous 7 {noun}s ({}, {} of 7 with data).", format::delta(metric, v - m, &s), fmt(m), week.len())
+    });
+    let main_v = fmt(v);
+    let min_s = cur.min.filter(|_| metric == Metric::HeartRate).map(|m| fmt(m));
+    let max_s = cur.max.filter(|_| metric == Metric::HeartRate).map(|m| fmt(m));
+    view! {
+        <Section title="Summary">
+            <dl class="stat-grid">
+                <div><dt>{main_label}</dt><dd class="tabular">{main_v}</dd></div>
+                {min_s.map(|m| view! { <div><dt>"Lowest reading"</dt><dd class="tabular">{m}</dd></div> })}
+                {max_s.map(|m| view! { <div><dt>"Highest reading"</dt><dd class="tabular">{m}</dd></div> })}
+                {cur.coverage.map(|c| view! { <div><dt>"Recorded"</dt><dd class="tabular">{format!("{:.0}% of the day{}", c * 100.0, if partial { " so far" } else { "" })}</dd></div> })}
+                <div><dt>"Records"</dt><dd class="tabular">{cur.count.to_string()}</dd></div>
+            </dl>
+            {cmp_prev.map(|t| view! { <p class="compare">{t}</p> })}
+            {cmp_week.map(|t| view! { <p class="muted">{t}</p> })}
+        </Section>
+    }
+    .into_any()
 }
 
 /// Metric-specific summaries: sleep timing and stages, zones, HRV method.

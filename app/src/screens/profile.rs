@@ -309,7 +309,7 @@ fn RestoreBackup() -> impl IntoView {
                     <div class="confirm">
                         <p><strong>"Backup ready to restore"</strong></p>
                         <p class="tabular">{format!("{} database · created {} · {} measurements · {} journal entries · format v{}", if b.database == DbKind::Demo { "Demo" } else { "Personal" }, time::format_ts(b.created_at, &tz, "%-d %b %Y %H:%M"), b.measurements.len(), b.journal.len(), b.version)}</p>
-                        <p class="muted">"Merge adds anything not already stored (matching records are skipped). Replace deletes the current data in this database first."</p>
+                        <p class="muted">"Merge adds measurements not already stored and journal entries only for days without one; nothing you have is overwritten. Replace deletes the current data in this database first."</p>
                         <div class="btn-row">
                             <button class="btn primary" on:click=move |_| restore(false)>"Merge"</button>
                             <button class="btn danger-outline" on:click=move |_| restore(true)>"Replace"</button>

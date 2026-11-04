@@ -214,6 +214,7 @@ pub fn SheetHost() -> impl IntoView {
                                 </dl>
                             }.into_any(),
                         }}
+                        <RecordList metric=metric day=day />
                         <p class="fineprint">{info.caution}</p>
                     </SheetFrame>
                 }.into_any()
@@ -322,4 +323,86 @@ pub fn Section(#[prop(into)] title: String, #[prop(optional, into)] action: Opti
 pub fn chart_width(vw: f64) -> f64 {
     let content = if vw >= 900.0 { (vw - 260.0).min(860.0) } else { vw };
     (content - 64.0).clamp(260.0, 760.0)
+}
+
+fn kind_label(k: airspace_core::SampleKind) -> &'static str {
+    use airspace_core::SampleKind::*;
+    match k {
+        Instant => "reading",
+        Interval => "interval count",
+        CumulativeCounter => "running counter",
+        DailyTotal => "daily total",
+        Session => "session",
+    }
+}
+
+fn offset_label(m: Option<i32>) -> String {
+    match m {
+        Some(o) => format!("UTC{}{:02}:{:02}", if o < 0 { "−" } else { "+" }, o.abs() / 60, o.abs() % 60),
+        None => "offset not recorded".into(),
+    }
+}
+
+/// Individual stored records behind a day's value, with full provenance.
+#[component]
+fn RecordList(metric: airspace_core::Metric, day: chrono::NaiveDate) -> impl IntoView {
+    let app = use_app();
+    let shown = RwSignal::new(false);
+    let rows = RwSignal::new(None::<Vec<airspace_core::Measurement>>);
+    let load = move || {
+        shown.set(true);
+        leptos::task::spawn_local(async move {
+            let mut v = crate::state::load_range(app, metric, day, day).await;
+            v.sort_by_key(|m| m.start);
+            rows.set(Some(v));
+        });
+    };
+    view! {
+        {move || if !shown.get() {
+            view! { <button class="link" on:click=move |_| load()>"Show individual records"</button> }.into_any()
+        } else {
+            match rows.get() {
+                None => view! { <p class="muted" aria-busy="true">"Loading…"</p> }.into_any(),
+                Some(v) => {
+                    let tz = app.tz_untracked();
+                    let s = app.settings.get_untracked();
+                    let total = v.len();
+                    let limit = 120;
+                    let start = total.saturating_sub(limit);
+                    let items: Vec<(String, String, String, String)> = v[start..].iter().rev().map(|m| {
+                        let when = match m.end {
+                            Some(e) if m.kind != airspace_core::SampleKind::Instant && m.kind != airspace_core::SampleKind::CumulativeCounter =>
+                                format!("{}–{}", time::format_ts(m.start, &tz, "%H:%M"), time::format_ts(e, &tz, "%H:%M")),
+                            _ => time::format_ts(m.start, &tz, "%H:%M:%S"),
+                        };
+                        let value = if m.metric == airspace_core::Metric::Sleep { time::fmt_minutes(m.value) } else { airspace_core::settings::display(m.metric, m.value, &s).joined() };
+                        let kind = format!("{} · {} · {}", kind_label(m.kind), origin_label(m.prov.origin), format!("{:?}", m.prov.status).to_lowercase());
+                        let mut details = vec![offset_label(m.utc_offset_min), m.prov.source_name.clone()];
+                        if let Some(d) = &m.prov.device { details.push(d.clone()); }
+                        if let Some(id) = &m.prov.original_id { details.push(format!("source id {id}")); }
+                        if let Some(b) = &m.prov.batch_id { details.push(format!("batch {b}")); }
+                        details.push(format!("stored {}", time::format_ts(m.prov.ingested_at, &tz, "%-d %b %H:%M")));
+                        if m.prov.provisional { details.push("provisional mapping".into()); }
+                        if let Some(c) = m.prov.confidence { details.push(format!("confidence {c}")); }
+                        if let Some(x) = &m.superseded_by { details.push(format!("superseded by {x}")); }
+                        (when, value, kind, details.join(" · "))
+                    }).collect();
+                    view! {
+                        <h3 class="sub">"Stored records"</h3>
+                        {(total > limit).then(|| view! { <p class="muted">{format!("Showing the latest {limit} of {total} records. Export CSV for all of them.")}</p> })}
+                        <ul class="records" aria-label="Stored records, newest first">
+                            {items.into_iter().map(|(w, val, k, d)| view! {
+                                <li>
+                                    <p class="rec-main tabular"><span>{w}</span><strong>{val}</strong></p>
+                                    <p class="rec-kind">{k}</p>
+                                    <p class="rec-prov">{d}</p>
+                                </li>
+                            }).collect_view()}
+                        </ul>
+                        <p class="muted">"Records are shown exactly as stored; daily values are calculated from them and never replace them."</p>
+                    }.into_any()
+                }
+            }
+        }}
+    }
 }

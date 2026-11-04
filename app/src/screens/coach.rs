@@ -230,10 +230,11 @@ async fn send_chat(app: &crate::state::App, cfg: &AiConfig, turns: &[ChatTurn]) 
     if !platform::is_online() {
         return Err("You're offline. The AI coach needs a connection; everything else works offline.".into());
     }
-    let spec = ai::chat_request(cfg, ai::SYSTEM_PROMPT, turns, !is_tauri());
+    let adapter = ai::provider(cfg.provider);
+    let spec = adapter.chat_request(cfg, ai::SYSTEM_PROMPT, turns, !is_tauri());
     let (status, body) = execute(app, cfg.provider, spec).await?;
     if (200..300).contains(&status) {
-        ai::parse_chat_response(cfg.provider, &body)
+        adapter.parse_response(&body)
     } else {
         Err(ai::describe_http_error(status, &body))
     }
@@ -248,7 +249,7 @@ pub async fn execute(app: &crate::state::App, provider: AiProviderKind, spec: Ht
     } else {
         let key = app.ai_key_mem.get_untracked().ok_or("No API key in this session.")?;
         let mut headers = spec.headers.clone();
-        headers.push(ai::auth_header(provider, &key));
+        headers.push(ai::provider(provider).auth_header(&key));
         platform::http(&spec.method, &spec.url, &headers, spec.body.as_deref()).await
     }
 }
@@ -306,13 +307,21 @@ pub fn AiSettings() -> impl IntoView {
         spawn_local(async move {
             if !k.trim().is_empty() {
                 if is_tauri() {
-                    if let Err(e) = platform::invoke::<()>("ai_key_set", serde_json::json!({"key": k.trim()})).await {
+                    if let Err(e) = platform::invoke::<()>("ai_key_set", serde_json::json!({"key": k.trim(), "endpoint": c.endpoint.clone()})).await {
                         status.set(Some(Err(format!("Couldn't store the key securely: {e}"))));
                         return;
                     }
                     app.ai_native_key.set(true);
                 } else {
                     app.ai_key_mem.set(Some(k.trim().to_string()));
+                }
+            }
+            else if is_tauri() && app.ai_native_key.get_untracked() {
+                // A stored key stays bound to the endpoint it was entered for.
+                let bound: Option<String> = platform::invoke("ai_key_endpoint", ()).await.unwrap_or(None);
+                if bound.map(|b| b.trim().trim_end_matches('/') != c.endpoint.trim().trim_end_matches('/')).unwrap_or(false) {
+                    status.set(Some(Err("Your stored key was saved for a different endpoint. Enter the key again to use it with this one.".into())));
+                    return;
                 }
             }
             key.set(String::new());

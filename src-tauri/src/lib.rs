@@ -13,6 +13,8 @@ use tauri::Manager;
 use tauri_plugin_vault::VaultExt;
 
 const AI_KEY: &str = "ai_api_key";
+/// The endpoint the key was saved for; the key is only ever sent there.
+const AI_ENDPOINT: &str = "ai_api_endpoint";
 
 type CmdResult<T> = Result<T, String>;
 
@@ -85,18 +87,33 @@ async fn export_file(app: tauri::AppHandle, name: String, content: String) -> Cm
 
 // ---- Optional AI coach -----------------------------------------------------
 
+/// Stores the key together with the endpoint it may be sent to.
 #[tauri::command]
-async fn ai_key_set(app: tauri::AppHandle, key: String) -> CmdResult<()> {
+async fn ai_key_set(app: tauri::AppHandle, key: String, endpoint: String) -> CmdResult<()> {
     let key = key.trim();
     if key.is_empty() || key.len() > 512 {
         return Err("That doesn't look like an API key.".into());
     }
-    app.vault().set(AI_KEY, key).map_err(|e| e.to_string())
+    if !allowed_url(&endpoint) {
+        return Err("The endpoint must use HTTPS.".into());
+    }
+    app.vault().set(AI_KEY, key).map_err(|e| e.to_string())?;
+    app.vault().set(AI_ENDPOINT, endpoint.trim()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn ai_key_delete(app: tauri::AppHandle) -> CmdResult<()> {
-    app.vault().delete(AI_KEY).map_err(|e| e.to_string())
+    app.vault().delete(AI_KEY).map_err(|e| e.to_string())?;
+    app.vault().delete(AI_ENDPOINT).map_err(|e| e.to_string())
+}
+
+/// The endpoint the stored key is bound to, if any.
+#[tauri::command]
+async fn ai_key_endpoint(app: tauri::AppHandle) -> CmdResult<Option<String>> {
+    if app.vault().get(AI_KEY).map_err(|e| e.to_string())?.is_none() {
+        return Ok(None);
+    }
+    app.vault().get(AI_ENDPOINT).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -117,7 +134,12 @@ async fn ai_request(app: tauri::AppHandle, provider: AiProviderKind, spec: HttpS
         return Err("The endpoint must use HTTPS.".into());
     }
     let key = app.vault().get(AI_KEY).map_err(|e| e.to_string())?.ok_or("No API key is stored. Add one in Coach settings.")?;
-    let (hk, hv) = ai::auth_header(provider, &key);
+    // The key only goes to the endpoint it was saved for, whatever the webview asks.
+    let bound = app.vault().get(AI_ENDPOINT).map_err(|e| e.to_string())?.unwrap_or_default();
+    if !ai::url_matches_endpoint(&spec.url, &bound) {
+        return Err("This request isn't for the endpoint your key was saved with. Re-enter the key for the new endpoint.".into());
+    }
+    let (hk, hv) = ai::provider(provider).auth_header(&key);
     tauri::async_runtime::spawn_blocking(move || {
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .http_status_as_error(false)
@@ -213,6 +235,7 @@ pub fn run() {
             ai_key_set,
             ai_key_delete,
             ai_key_status,
+            ai_key_endpoint,
             ai_request,
             reminders_set,
         ])

@@ -98,10 +98,15 @@ pub fn parse_backup(content: &str) -> Result<Backup, RestoreError> {
     Ok(b)
 }
 
+/// The serde (snake_case) name of an enum value, as used in JSON.
+fn serde_name<T: Serialize>(v: &T) -> String {
+    serde_json::to_value(v).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default()
+}
+
 /// CSV for one metric. Columns are documented in docs/BACKUP_FORMAT.md.
 pub fn metric_csv(metric: Metric, items: &[Measurement], tz: &Tz) -> String {
     let mut out = String::from(
-        "id,metric,kind,start_utc,end_utc,local_day,utc_offset_min,value,unit,origin,status,source,device,original_id,provisional,confidence,superseded_by,detail\n",
+        "id,metric,kind,start_utc,end_utc,local_day,utc_offset_min,value,unit,origin,status,source,device,original_id,batch_id,ingested_utc,provisional,confidence,coverage,calc_version,superseded_by,detail\n",
     );
     let iso = |ms: i64| time::format_ts(ms, &Tz::UTC, "%Y-%m-%dT%H:%M:%S%.3fZ");
     let mut rows: Vec<&Measurement> = items.iter().filter(|m| m.metric == metric).collect();
@@ -111,20 +116,24 @@ pub fn metric_csv(metric: Metric, items: &[Measurement], tz: &Tz) -> String {
         let fields = [
             m.id.clone(),
             m.metric.key().into(),
-            format!("{:?}", m.kind).to_lowercase(),
+            serde_name(&m.kind),
             iso(m.start),
             m.end.map(iso).unwrap_or_default(),
             time::day_key(crate::aggregate::day_of(m, tz)),
             m.utc_offset_min.map(|o| o.to_string()).unwrap_or_default(),
             format!("{}", m.value),
             m.unit.key().into(),
-            format!("{:?}", m.prov.origin).to_lowercase(),
-            format!("{:?}", m.prov.status).to_lowercase(),
+            serde_name(&m.prov.origin),
+            serde_name(&m.prov.status),
             m.prov.source_name.clone(),
             m.prov.device.clone().unwrap_or_default(),
             m.prov.original_id.clone().unwrap_or_default(),
+            m.prov.batch_id.clone().unwrap_or_default(),
+            iso(m.prov.ingested_at),
             m.prov.provisional.to_string(),
             m.prov.confidence.map(|c| c.to_string()).unwrap_or_default(),
+            m.prov.coverage.map(|c| format!("{c}")).unwrap_or_default(),
+            m.prov.calc_version.map(|c| c.to_string()).unwrap_or_default(),
             m.superseded_by.clone().unwrap_or_default(),
             detail,
         ];
@@ -168,5 +177,7 @@ mod tests {
         assert!(rows.len() > 20);
         assert_eq!(rows[0][0], "id");
         assert!(rows.iter().skip(1).all(|r| r.len() == rows[0].len()));
+        let steps = metric_csv(Metric::Steps, &ds.measurements, &Tz::UTC);
+        assert!(steps.contains(",cumulative_counter,") && steps.contains(",bluetooth_live,") && steps.contains(",history_import,"));
     }
 }

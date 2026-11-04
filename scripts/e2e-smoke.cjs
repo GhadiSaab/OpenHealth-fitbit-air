@@ -37,6 +37,14 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   check(true, 'onboarding renders');
   await shot('01-onboarding');
 
+  // Offline after the very first visit: the service worker precaches the app shell.
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await ctx.setOffline(true);
+  await page.reload();
+  await page.getByRole('heading', { name: 'Airspace' }).waitFor({ timeout: 20000 });
+  check(true, 'app loads offline after the first visit');
+  await ctx.setOffline(false);
+
   // Empty database path first: "Set up my device later" → empty Today.
   await page.getByRole('button', { name: /Set up my device later/ }).click();
   await page.getByText('No data yet').waitFor();
@@ -61,13 +69,13 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   await page.getByRole('heading', { name: 'Explore', exact: true }).waitFor();
   await shot('04-explore');
   await page.getByRole('button', { name: /^Heart rate/ }).first().click();
-  await page.getByRole('img', { name: /Heart rate on/ }).waitFor();
+  await page.getByRole('application', { name: /Heart rate on/ }).waitFor();
   check(await page.getByText(/samples, shown as/).count() === 1, 'intraday heart-rate chart with sample summary');
   await shot('05-heart-day');
 
   // Keyboard inspection of a chart.
   await page.getByRole('radio', { name: 'Week' }).click();
-  const chart = page.getByRole('img', { name: /Heart rate for/ });
+  const chart = page.getByRole('application', { name: /Heart rate for/ });
   await chart.focus();
   await page.keyboard.press('Home');
   const readout = await page.locator('.chart-readout').first().innerText();
@@ -78,7 +86,7 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
 
   // Sleep day view (stage timeline).
   await page.goto(base + '#/explore/sleep/d');
-  await page.getByRole('img', { name: /Sleep stages/ }).waitFor({ timeout: 15000 });
+  await page.getByRole('application', { name: /Sleep stages/ }).waitFor({ timeout: 15000 });
   check(true, 'sleep stage timeline renders');
   await shot('07-sleep-day');
 

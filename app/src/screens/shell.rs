@@ -39,6 +39,8 @@ pub fn Shell() -> impl IntoView {
     // Routing: keep the URL hash in sync so Back works (browser and Android).
     Effect::new(move |_| {
         let r = app.route.get();
+        // A sheet belongs to the screen that opened it.
+        app.sheet.set(None);
         let h = r.to_hash();
         let loc = platform::window().location();
         if loc.hash().unwrap_or_default() != h {
@@ -89,9 +91,12 @@ pub fn Shell() -> impl IntoView {
         }
         // Keep the demo current if it is the active database.
         if app.db.get_untracked() == airspace_core::DbKind::Demo {
+            // Opening the demo resets the day; keep the day the user had selected.
+            let saved = app.day.get_untracked();
             if let Err(e) = app.open_demo().await {
                 app.error(e);
             }
+            app.day.set(saved.min(app.today_untracked()));
         }
         let start = if !app.settings.with_untracked(|s| s.onboarded) {
             Route::Onboarding

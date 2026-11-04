@@ -225,6 +225,63 @@ pub fn describe_http_error(status: u16, body: &str) -> String {
     }
 }
 
+/// The AI provider boundary. Each adapter translates Airspace's request into
+/// one provider protocol; Airspace does not assume all providers share one.
+pub trait AiProvider {
+    fn kind(&self) -> AiProviderKind;
+    /// Builds a chat request (without credentials).
+    fn chat_request(&self, cfg: &AiConfig, system: &str, turns: &[ChatTurn], browser: bool) -> HttpSpec;
+    /// A request that verifies the key without sending health data.
+    fn test_request(&self, cfg: &AiConfig, browser: bool) -> HttpSpec;
+    fn parse_response(&self, body: &str) -> Result<String, String>;
+    /// The credential header; applied only by the platform transport.
+    fn auth_header(&self, key: &str) -> (String, String);
+}
+
+/// Anthropic Messages API (`POST /v1/messages`, `x-api-key`, `anthropic-version`).
+pub struct AnthropicProvider;
+/// OpenAI chat-completions shape (`POST /chat/completions`, Bearer token).
+pub struct OpenAiCompatibleProvider;
+
+macro_rules! adapter {
+    ($t:ty, $k:expr) => {
+        impl AiProvider for $t {
+            fn kind(&self) -> AiProviderKind {
+                $k
+            }
+            fn chat_request(&self, cfg: &AiConfig, system: &str, turns: &[ChatTurn], browser: bool) -> HttpSpec {
+                chat_request(&AiConfig { provider: $k, ..cfg.clone() }, system, turns, browser)
+            }
+            fn test_request(&self, cfg: &AiConfig, browser: bool) -> HttpSpec {
+                test_request(&AiConfig { provider: $k, ..cfg.clone() }, browser)
+            }
+            fn parse_response(&self, body: &str) -> Result<String, String> {
+                parse_chat_response($k, body)
+            }
+            fn auth_header(&self, key: &str) -> (String, String) {
+                auth_header($k, key)
+            }
+        }
+    };
+}
+adapter!(AnthropicProvider, AiProviderKind::Anthropic);
+adapter!(OpenAiCompatibleProvider, AiProviderKind::OpenAiCompatible);
+
+pub fn provider(kind: AiProviderKind) -> Box<dyn AiProvider> {
+    match kind {
+        AiProviderKind::Anthropic => Box::new(AnthropicProvider),
+        AiProviderKind::OpenAiCompatible => Box::new(OpenAiCompatibleProvider),
+    }
+}
+
+/// True if `url` targets the configured endpoint (used to bind a stored key
+/// to the endpoint it was saved for).
+pub fn url_matches_endpoint(url: &str, endpoint: &str) -> bool {
+    let base = endpoint.trim().trim_end_matches('/').to_ascii_lowercase();
+    let u = url.trim().to_ascii_lowercase();
+    !base.is_empty() && (u == base || u.starts_with(&format!("{base}/")))
+}
+
 /// What the user agreed to share for one request.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ConsentSelection {
@@ -377,6 +434,16 @@ mod tests {
         assert!(r.headers.iter().any(|(k, v)| k == "anthropic-version" && v == ANTHROPIC_VERSION));
         let o = AiConfig { provider: AiProviderKind::OpenAiCompatible, endpoint: "https://x.example/v1/".into(), model: "m".into() };
         assert_eq!(chat_request(&o, "s", &[], false).url, "https://x.example/v1/chat/completions");
+    }
+
+    #[test]
+    fn provider_trait_and_endpoint_binding() {
+        let p = provider(AiProviderKind::OpenAiCompatible);
+        let c = AiConfig { provider: AiProviderKind::OpenAiCompatible, endpoint: "https://x.example/v1".into(), model: "m".into() };
+        assert_eq!(p.auth_header("k").1, "Bearer k");
+        assert!(url_matches_endpoint(&p.chat_request(&c, "s", &[], false).url, &c.endpoint));
+        assert!(!url_matches_endpoint("https://x.example.evil/v1/chat", "https://x.example"));
+        assert!(!url_matches_endpoint("https://evil.example/v1", "https://x.example/v1"));
     }
 
     #[test]
