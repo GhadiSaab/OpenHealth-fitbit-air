@@ -352,7 +352,7 @@ fn RecordList(metric: airspace_core::Metric, day: chrono::NaiveDate) -> impl Int
     let load = move || {
         shown.set(true);
         leptos::task::spawn_local(async move {
-            let mut v = crate::state::load_range(app, metric, day, day).await;
+            let mut v = crate::state::load_range_all(app, metric, day, day).await;
             v.sort_by_key(|m| m.start);
             rows.set(Some(v));
         });
@@ -384,7 +384,7 @@ fn RecordList(metric: airspace_core::Metric, day: chrono::NaiveDate) -> impl Int
                         details.push(format!("stored {}", time::format_ts(m.prov.ingested_at, &tz, "%-d %b %H:%M")));
                         if m.prov.provisional { details.push("provisional mapping".into()); }
                         if let Some(c) = m.prov.confidence { details.push(format!("confidence {c}")); }
-                        if let Some(x) = &m.superseded_by { details.push(format!("superseded by {x}")); }
+                        if let Some(x) = &m.superseded_by { details.push(format!("superseded by {x} — kept, not used in daily values")); }
                         (when, value, kind, details.join(" · "))
                     }).collect();
                     view! {

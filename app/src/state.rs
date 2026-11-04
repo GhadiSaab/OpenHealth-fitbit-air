@@ -527,6 +527,15 @@ where
     out
 }
 
+/// Like [`load_range`] but also returns superseded originals (for provenance views).
+pub async fn load_range_all(app: App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Vec<Measurement> {
+    let tz = app.tz_untracked();
+    let a = time::day_start(from, &tz) - DAY_MS;
+    let b = time::day_start(to, &tz) + 2 * DAY_MS;
+    let ms = repo::measurements(app.db.get_untracked(), Some(metric), a, b).await.unwrap_or_default();
+    ms.into_iter().filter(|m| { let d = aggregate::day_of(m, &tz); d >= from && d <= to }).collect()
+}
+
 /// Measurements for one metric over a set of local days.
 pub async fn load_range(app: App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Vec<Measurement> {
     let tz = app.tz_untracked();

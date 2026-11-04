@@ -314,9 +314,11 @@ fn Trends() -> impl IntoView {
                             {move || {
                                 let day = app.day.get();
                                 let s = app.settings.get();
+                                // Today's steps are still growing: compare complete days only.
+                                let end = if m.is_additive() && day >= app.today() { day - Duration::days(1) } else { day };
                                 let (series, cmp) = app.summaries.with(|i| (
                                     i.series(m, day - Duration::days(13), day).into_iter().map(|(_, v)| v).collect::<Vec<_>>(),
-                                    compare_periods(i, m, day - Duration::days(6), day),
+                                    compare_periods(i, m, end - Duration::days(6), end),
                                 ));
                                 let txt = match (cmp.current, cmp.reliable()) {
                                     (Some(c), true) => format!("{} avg · {} vs prior 7 days", format::value(m, c, &s), format::delta(m, cmp.delta().unwrap_or(0.0), &s)),
@@ -326,7 +328,7 @@ fn Trends() -> impl IntoView {
                                 view! {
                                     <span class="trend-name">{catalog::info(m).title}</span>
                                     <span class="trend-text tabular">{txt}</span>
-                                    <span class="trend-cov">{format!("{} of 7 days recorded", cmp.current_days)}</span>
+                                    <span class="trend-cov">{format!("{} of 7 {}days recorded{}", cmp.current_days, if end < day { "complete " } else { "" }, if end < day { " (today excluded)" } else { "" })}</span>
                                     <Sparkline values=series tone=tone />
                                 }
                             }}

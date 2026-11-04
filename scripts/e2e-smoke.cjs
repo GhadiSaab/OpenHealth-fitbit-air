@@ -55,8 +55,10 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   await page.getByRole('button', { name: 'Explore demo' }).click();
   await page.getByText(/Demo data\./).first().waitFor({ timeout: 30000 });
   await page.getByText(/Steps/).first().waitFor();
-  check(await page.getByText(/disconnected/).count() > 0, 'demo shows a disconnected device state');
-  check(await page.getByText(/Last reading/).count() > 0, 'stale live reading is labelled "Last reading"');
+  await page.getByText(/disconnected/).first().waitFor({ timeout: 15000 });
+  check(true, 'demo shows a disconnected device state');
+  await page.getByText(/Last reading/).first().waitFor({ timeout: 15000 });
+  check(true, 'stale live reading is labelled "Last reading"');
   await shot('03-today-demo');
 
   // Persistence across reload.
@@ -102,6 +104,14 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   await page.getByRole('button', { name: 'Save entry' }).click();
   await page.getByText('Journal saved').waitFor();
   check(true, 'journal entry saves');
+  // Unsaved text is kept when leaving the tab.
+  await page.getByPlaceholder(/How was the day/).fill('Note typed then left');
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
+  await page.getByRole('heading', { name: 'Explore', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Journal', exact: true }).click();
+  await page.getByRole('heading', { name: 'Journal', exact: true }).waitFor();
+  await page.waitForTimeout(300);
+  check(await page.getByPlaceholder(/How was the day/).inputValue() === 'Note typed then left', 'journal text survives switching tabs');
   await shot('09-journal');
 
   // Coach without AI: local insights only, no network.

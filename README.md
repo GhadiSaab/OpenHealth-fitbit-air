@@ -67,12 +67,13 @@ No feature pretends to work: unavailable adapters say what is missing.
   * AI request shapes and endpoint binding;
   * SQLite migrations and persistence after reopening;
   * a year of per-minute heart rate (about 525,000 samples), which summarizes in about 130 ms in release.
-* **Browser test** (`scripts/e2e-smoke.cjs`) drives the PWA in headless Chromium. It passes, covering:
+* **Browser test** (`scripts/e2e-smoke.cjs`, 33 checks) drives the PWA in headless Chromium. It passes, covering:
   * onboarding, offline reload after the first visit, an empty database, the demo, and persistence across reload;
   * charts with keyboard inspection and table view, and the journal;
   * Coach without AI, and the full AI flow against a local mock provider: connection test, consent, an excluded metric
     staying out, compact summaries only, the key never stored or put in a URL, and the answer labelled;
-  * backup export with no key in it, import preview with rejected records, and re-import detected as duplicates;
+  * journal text surviving a tab switch, backup export with no key in it, import preview with rejected records, and
+    re-import detected as duplicates;
   * dark theme, and no console errors.
 * **The Android APK was not built or verified in this environment**, because the sandbox's network policy blocks the
   Android SDK download host.

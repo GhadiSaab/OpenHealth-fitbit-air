@@ -173,6 +173,7 @@ fn DayEditor() -> impl IntoView {
                     placeholder="How was the day? Anything worth remembering?"
                     prop:value=move || draft.with(|d| d.note.clone())
                     on:input=move |ev| { draft.update(|d| d.note = event_target_value(&ev)); dirty.set(true); }
+                    on:blur=move |_| if dirty.get_untracked() { save() }
                 ></textarea>
             </label>
             <fieldset class="tags">
@@ -186,6 +187,7 @@ fn DayEditor() -> impl IntoView {
                             <button class="chip toggle" aria-pressed=move || if on() { "true" } else { "false" } on:click=move |_| {
                                 draft.update(|d| if d.tags.contains(&t3) { d.tags.retain(|x| x != &t3) } else { d.tags.push(t3.clone()) });
                                 dirty.set(true);
+                                save();
                             }>{t}</button>
                         }
                     }).collect_view()}
