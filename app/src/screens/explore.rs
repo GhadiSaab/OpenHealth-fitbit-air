@@ -612,6 +612,34 @@ fn MetricExtras(metric: Metric, range: Range) -> impl IntoView {
                     </Section>
                 }.into_any()
             }
+            Metric::Steps => {
+                let goal = s.step_goal as f64;
+                let anchor = app.day.get();
+                let today = app.today();
+                let weeks: Vec<Vec<String>> = (0..8)
+                    .map(|i| time::week_start(anchor) - Duration::days(7 * i))
+                    .filter(|w| *w <= today)
+                    .map(|w| {
+                        let vals: Vec<f64> = app.summaries.with(|idx| idx.series(Metric::Steps, w, w + Duration::days(6)).into_iter().filter_map(|(_, v)| v).collect());
+                        let met = vals.iter().filter(|v| **v >= goal).count();
+                        vec![
+                            format!("{} – {}", w.format("%-d %b"), (w + Duration::days(6)).format("%-d %b")),
+                            format!("{} of 7", vals.len()),
+                            format!("{met}"),
+                            if vals.is_empty() { "—".into() } else { format::value(Metric::Steps, vals.iter().sum::<f64>() / vals.len() as f64, &s) },
+                        ]
+                    })
+                    .collect();
+                view! {
+                    <Section title="Calendar">
+                        <StepsCalendar />
+                    </Section>
+                    <Section title="Weekly consistency">
+                        <DataTable caption="Last 8 weeks" headers=vec!["Week", "Days recorded", "Days at goal", "Daily average"] rows=weeks />
+                        <p class="muted">"Days without data are not counted as missed goals."</p>
+                    </Section>
+                }.into_any()
+            }
             Metric::HeartRateZones => {
                 let mut mins: BTreeMap<String, f64> = BTreeMap::new();
                 let mut bounds = BTreeMap::new();
@@ -727,5 +755,51 @@ fn SourcesSection(metric: Metric, range: Range) -> impl IntoView {
                 </button>
             </Section>
         }.into_any()
+    }
+}
+
+/// Month calendar of daily steps with goal status. Tapping a day opens it.
+#[component]
+fn StepsCalendar() -> impl IntoView {
+    let app = use_app();
+    move || {
+        let anchor = app.day.get();
+        let month = time::month_start(anchor);
+        let today = app.today();
+        let s = app.settings.get();
+        let goal = s.step_goal as f64;
+        let first = time::week_start(month);
+        let weeks: Vec<NaiveDate> = (0..6).map(|w| first + Duration::days(7 * w)).filter(|w| w.month() == month.month() || (*w + Duration::days(6)).month() == month.month()).collect();
+        view! {
+            <p class="field-label">{month.format("%B %Y").to_string()}</p>
+            <div class="cal-grid steps-cal" role="grid" aria-label=format!("Steps per day in {}", month.format("%B %Y"))>
+                <div class="cal-row" role="row">
+                    {["M", "T", "W", "T", "F", "S", "S"].into_iter().map(|d| view! { <span class="cal-dow" role="columnheader">{d}</span> }).collect_view()}
+                </div>
+                {weeks.into_iter().map(|w| view! {
+                    <div class="cal-row" role="row">
+                        {(0..7).map(|i| {
+                            let d = w + Duration::days(i);
+                            let v = app.summaries.with(|idx| idx.value(Metric::Steps, d));
+                            let in_month = d.month() == month.month();
+                            let label = match v {
+                                Some(v) => format!("{}: {}{}", d.format("%A %-d %B"), format::value(Metric::Steps, v, &s), if v >= goal { ", goal reached" } else { "" }),
+                                None => format!("{}: no data", d.format("%A %-d %B")),
+                            };
+                            let txt = v.map(|v| if v >= 1000.0 { format!("{:.1}k", v / 1000.0) } else { format!("{}", v.round()) });
+                            view! {
+                                <button role="gridcell" class="cal-day" class:out=!in_month class:goal-met=v.map(|v| v >= goal).unwrap_or(false)
+                                    class:sel={d == anchor} disabled={d > today} aria-label=label
+                                    on:click=move |_| { app.day.set(d); app.route.set(Route::Metric(Metric::Steps, Range::Day)); }>
+                                    <span class="num tabular">{d.day()}</span>
+                                    <span class="cal-val tabular">{txt.unwrap_or_else(|| "–".into())}</span>
+                                </button>
+                            }
+                        }).collect_view()}
+                    </div>
+                }).collect_view()}
+            </div>
+            <p class="cal-legend muted"><span class="mk goal"></span>" goal reached · – no data"</p>
+        }
     }
 }

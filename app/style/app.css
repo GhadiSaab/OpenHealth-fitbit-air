@@ -447,3 +447,8 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
   .tile-value { font-size: 1.625rem; }
   .hero-value { font-size: 2.5rem; }
 }
+.steps-cal .cal-day { min-height: 54px; gap: 1px; }
+.cal-val { font-size: 11px; font-weight: 550; color: var(--muted); }
+.cal-day.goal-met { background: color-mix(in srgb, var(--activity) 16%, transparent); }
+.cal-day.goal-met .cal-val { color: var(--ink); }
+.cal-day.sel .cal-val { color: var(--page); }

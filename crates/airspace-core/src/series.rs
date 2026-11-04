@@ -122,7 +122,10 @@ pub fn bucket_sums(points: &[Point], from: i64, to: i64, width: i64) -> Vec<Buck
 /// Chooses a bucket width so roughly `target` buckets cover `[from, to)`,
 /// snapped to a friendly duration, and never finer than the data.
 pub fn choose_width(from: i64, to: i64, target: i64, data_interval: Option<i64>) -> i64 {
-    const STEPS: [i64; 10] = [60_000, 120_000, 300_000, 600_000, 900_000, 1_800_000, 3_600_000, 7_200_000, 10_800_000, 21_600_000];
+    const STEPS: [i64; 15] = [
+        60_000, 120_000, 300_000, 600_000, 900_000, 1_800_000, 3_600_000, 7_200_000, 10_800_000, 21_600_000, 43_200_000, 86_400_000,
+        172_800_000, 604_800_000, 2_419_200_000,
+    ];
     let raw = ((to - from) / target.max(1)).max(1);
     let min = data_interval.unwrap_or(0);
     STEPS.into_iter().find(|s| *s >= raw && *s >= min).unwrap_or(*STEPS.last().unwrap())

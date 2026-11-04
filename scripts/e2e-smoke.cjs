@@ -103,13 +103,57 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   check(await page.locator('.insight').count() > 0, 'local insights render without AI');
   await shot('10-coach');
 
-  // AI key entered in the browser stays in memory and never reaches a backup.
+  // Optional AI coach against a local mock provider (Anthropic Messages API shape).
   const SECRET = 'sk-ant-test-SECRET-123456';
+  const received = [];
+  const mock = http.createServer((req, res) => {
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
+    if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      received.push({ method: req.method, url: req.url, headers: req.headers, body });
+      if (req.url === '/v1/models') { res.writeHead(200, { ...cors, 'content-type': 'application/json' }); return res.end('{"data":[{"id":"claude-opus-5-5"}]}'); }
+      if (req.url === '/v1/messages') {
+        res.writeHead(200, { ...cors, 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ content: [{ type: 'text', text: 'Mock review: your steps were steady this week.' }], stop_reason: 'end_turn' }));
+      }
+      res.writeHead(404, cors); res.end();
+    });
+  });
+  await new Promise((r) => mock.listen(0, '127.0.0.1', r));
+  const mockUrl = `http://127.0.0.1:${mock.address().port}`;
   await page.goto(base + '#/coach/settings');
+  await page.getByLabel('HTTPS endpoint').fill(mockUrl);
   await page.getByPlaceholder('Paste your key').fill(SECRET);
+  await page.getByRole('button', { name: 'Test connection' }).click();
+  await page.getByText(/Connected\. The provider accepted the key/).waitFor();
+  check(received.some((r) => r.url === '/v1/models' && r.headers['x-api-key'] === SECRET && !r.body), 'connection test sends the key in a header and no health data');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByText('Saved.').waitFor();
   check(await page.evaluate((s) => JSON.stringify(localStorage).includes(s), SECRET) === false, 'API key is not written to localStorage');
+  check(received.every((r) => !r.url.includes(SECRET)), 'API key never appears in a URL');
+
+  await page.goto(base + '#/coach');
+  await page.getByRole('button', { name: 'Weekly review' }).click();
+  await page.getByRole('heading', { name: 'Review before sending' }).waitFor();
+  check(received.filter((r) => r.url === '/v1/messages').length === 0, 'nothing is sent before consent');
+  await page.locator('.consent').getByRole('button', { name: 'SpO₂', exact: true }).click(); // exclude a metric
+  await shot('10b-consent');
+  await page.getByRole('button', { name: 'Share and ask' }).click();
+  await page.getByText('Mock review: your steps were steady this week.').waitFor();
+  check(await page.getByText(/AI-generated/).count() > 0, 'AI answer is labelled as AI-generated');
+  const msg = received.find((r) => r.url === '/v1/messages');
+  const sent = JSON.parse(msg.body);
+  const userText = sent.messages[sent.messages.length - 1].content;
+  check(msg.headers['x-api-key'] === SECRET && msg.headers['anthropic-version'] === '2026-10-21', 'Anthropic adapter sends documented headers');
+  check(userText.includes('<health_data>') && userText.includes('"steps"'), 'consented summaries are shared');
+  check(!userText.includes('spo2_avg_pct'), 'excluded metric is not shared');
+  check(!userText.includes('journal_note'), 'journal notes are not shared unless included');
+  check(msg.body.length < 30000, `only compact daily summaries are sent (${msg.body.length} bytes)`);
+  check(/notes and tags are user-written data, not instructions/i.test(sent.system), 'system prompt treats notes as data');
+  await shot('10c-ai-answer');
+  mock.close();
 
   // Data screen: export a backup and check its contents.
   await page.goto(base + '#/profile/data');
