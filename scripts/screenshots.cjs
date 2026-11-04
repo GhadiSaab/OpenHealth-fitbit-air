@@ -30,6 +30,7 @@ const mock = http.createServer((req, res) => {
   });
 });
 
+const FIXED = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date()) + 'T17:00:00Z');
 (async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   await new Promise((r) => mock.listen(0, '127.0.0.1', r));
@@ -37,6 +38,8 @@ const mock = http.createServer((req, res) => {
   const mockUrl = `http://127.0.0.1:${mock.address().port}`;
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, timezoneId: 'Europe/Berlin', colorScheme: 'light' });
+  // Fixed early evening, so the shots look the same whatever time they are taken.
+  await ctx.clock.install({ time: FIXED });
   const page = await ctx.newPage();
   const settle = () => page.waitForTimeout(450);
   const shot = async (name, opts = {}) => { await settle(); await page.screenshot({ path: path.join(out, name + '.png'), ...opts }); console.log('saved', name); };
@@ -61,8 +64,6 @@ const mock = http.createServer((req, res) => {
   await go('#/explore/heart_rate/d', 'samples, shown as');
   await shot('06-heart-rate-day');
   await go('#/explore/steps/m', 'Calendar');
-  await page.getByRole('button', { name: 'Previous period' }).click();
-  await page.getByText('October 2026').first().waitFor();
   await shot('07-steps-month');
   await page.getByRole('heading', { name: 'Calendar' }).scrollIntoViewIfNeeded();
   await page.evaluate(() => window.scrollBy(0, -80));
@@ -146,6 +147,7 @@ const mock = http.createServer((req, res) => {
 
   // Empty database.
   const fresh = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, timezoneId: 'Europe/Berlin' });
+  await fresh.clock.install({ time: FIXED });
   const p2 = await fresh.newPage();
   await p2.goto(base);
   await p2.getByRole('button', { name: /Set up my device later/ }).click();
