@@ -570,7 +570,11 @@ body:has(.app) .preboot { display: none; }
 /* ---- Large text (Android font scale / zoom up to 200%) ----------------- */
 .tile.hero { container: hero / inline-size; }
 /* Segmented control: equal columns that wrap into two rows rather than overflow. */
-.segmented { flex-wrap: wrap; }
+.segmented { flex-wrap: nowrap; }
+/* Only wrap the range selector when large text leaves no room for one row
+   (em here follows the user's text size). */
+.detail-controls { container: controls / inline-size; }
+@container controls (max-width: 17.5em) { .segmented { flex-wrap: wrap; } }
 .seg { flex: 1 1 auto; min-width: min(64px, 100%); padding: 0 var(--s3); }
 /* Tab labels are short, fixed words: cap their growth so four always fit. */
 .tab { font-size: min(var(--fs-xs), 17px); min-width: 0; }
@@ -582,3 +586,6 @@ body:has(.app) .preboot { display: none; }
    the radius tracks the text size instead of being infinite. */
 .btn, .status-strip, .date-pick, .demo-banner.compact, .segmented { border-radius: min(var(--r-pill), 1.75em); }
 .seg { border-radius: min(var(--r-pill), 1.5em); }
+.fav-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); }
+@media (min-width: 560px) { .fav-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); } }
+.fav-grid > * { min-width: 0; }

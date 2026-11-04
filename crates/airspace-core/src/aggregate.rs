@@ -585,9 +585,17 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], contex
     let mut parts = vec![];
     let mut overlapped = 0u32;
     let mut rejected = 0u32;
+    let mut daily_total_used = false;
     for ((_, source), mut g) in groups {
         let kind = g[0].kind;
         let origin = g[0].prov.origin;
+        // A daily total is the whole day by definition: once one is used, every
+        // lower-ranked record for that day is already counted in it, whatever
+        // time frame it was recorded in.
+        if daily_total_used {
+            overlapped += g.len() as u32;
+            continue;
+        }
         g.sort_by_key(|m| (m.start, m.prov.ingested_at));
         let mut total = 0.0;
         // The exact intervals this source contributed (coverage uses these, not the span).
@@ -607,6 +615,7 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], contex
                 overlapped += g.len() as u32 - 1;
                 extend(ds, de, &mut span);
                 contributed = true;
+                daily_total_used = true;
             }
             SampleKind::Interval => {
                 let mut last_end = i64::MIN;
@@ -712,7 +721,9 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], contex
         s.method = "No usable records".into();
     } else {
         s.value = Some(parts.iter().map(|p| p.value).sum());
-        let covered_ms = union_len(all_intervals, ds, de);
+        // Counter parts are already clipped to the day in the frame they were
+        // recorded in, which may not be the home zone's day bounds.
+        let covered_ms = union_len(all_intervals, i64::MIN / 4, i64::MAX / 4);
         s.coverage = Some((covered_ms as f64 / (de - ds) as f64).min(1.0));
         s.method = if parts.len() == 1 {
             format!("From {}", parts[0].label.to_lowercase())
@@ -988,6 +999,26 @@ mod tests {
             .collect();
         let total: f64 = summarize(&items, &ctx).iter().filter_map(|x| x.value).sum();
         assert_eq!(total, 1300.0);
+    }
+
+    #[test]
+    fn daily_total_wins_even_when_home_zone_is_far_ahead() {
+        // Daily total 12,000 plus a 2,000-step interval recorded at 09:00 −04:00;
+        // home zone Sydney, where that interval falls on the next calendar day.
+        let h = 3_600_000;
+        let ctx = SummaryContext { tz: parse_tz("Australia/Sydney"), now: i64::MAX / 2, demo: false };
+        let mut total = m(Metric::Steps, SampleKind::DailyTotal, D0, None, 12_000.0, Origin::HistoryImport);
+        total.day = Some("2026-10-30".into());
+        total.id = measurement_id(&total);
+        let mut iv = m(Metric::Steps, SampleKind::Interval, D0 + 13 * h, Some(D0 + 14 * h), 2000.0, Origin::HistoryImport);
+        iv.utc_offset_min = Some(-240);
+        iv.id = measurement_id(&iv);
+        let day = day_of(&iv, &ctx.tz);
+        total.day = Some(time::day_key(day));
+        total.id = measurement_id(&total);
+        let s = summarize(&[total, iv], &ctx);
+        let d = s.iter().find(|x| x.day == time::day_key(day)).unwrap();
+        assert_eq!(d.value, Some(12_000.0));
     }
 
     #[test]

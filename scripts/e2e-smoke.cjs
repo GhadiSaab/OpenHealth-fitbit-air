@@ -26,6 +26,10 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   const base = `http://127.0.0.1:${server.address().port}/`;
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, timezoneId: 'Europe/Berlin' });
+  // Fixed early evening so time-of-day labels ("Last reading", "so far today")
+  // are the same whenever the test runs; time still moves forward from there.
+  const berlinDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
+  await ctx.clock.install({ time: new Date(berlinDay + 'T17:00:00Z') });
   const page = await ctx.newPage();
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

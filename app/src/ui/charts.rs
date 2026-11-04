@@ -89,25 +89,44 @@ fn label_width(s: &str) -> f64 {
 /// never overlap or run off the card at any width.
 fn fit_labels(mut items: Vec<(f64, String)>, w: f64, left: f64) -> Vec<(f64, &'static str, String)> {
     items.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut out: Vec<(f64, &'static str, String)> = vec![];
-    let mut min_x = f64::INFINITY;
-    for (x, t) in items.into_iter().rev() {
-        let lw = label_width(&t);
-        let (anchor, x0, x1) = if x + lw / 2.0 > w - 2.0 {
+    let place = |x: f64, t: &str| {
+        let lw = label_width(t);
+        if x + lw / 2.0 > w - 2.0 {
             ("end", x - lw, x)
         } else if x - lw / 2.0 < left - 4.0 {
             ("start", x, x + lw)
         } else {
             ("middle", x - lw / 2.0, x + lw / 2.0)
-        };
-        if x1 + 8.0 > min_x {
-            continue;
         }
-        min_x = x0;
-        out.push((x, anchor, t));
+    };
+    let n = items.len();
+    // Use the smallest regular step (every label, every 2nd, every 3rd, ...),
+    // counted back from the latest, at which no two labels collide. A regular
+    // step keeps the spacing even instead of leaving uneven holes.
+    for step in 1..=n.max(1) {
+        let chosen: Vec<usize> = (0..n).filter(|i| (n - 1 - i) % step == 0).collect();
+        let mut prev_end = f64::NEG_INFINITY;
+        let mut ok = true;
+        for &i in &chosen {
+            let (_, x0, x1) = place(items[i].0, &items[i].1);
+            if x0 < prev_end + 8.0 {
+                ok = false;
+                break;
+            }
+            prev_end = x1;
+        }
+        if ok {
+            return chosen
+                .into_iter()
+                .map(|i| {
+                    let (x, t) = items[i].clone();
+                    let (anchor, _, _) = place(x, &t);
+                    (x, anchor, t)
+                })
+                .collect();
+        }
     }
-    out.reverse();
-    out
+    vec![]
 }
 
 /// Path for an optional trend overlay (e.g. a 7-day rolling average),

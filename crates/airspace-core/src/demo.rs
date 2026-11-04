@@ -132,7 +132,8 @@ pub fn generate(end_day: NaiveDate, tz: &Tz, now: i64) -> DemoDataset {
 
     // Simulated live session on the last day: history synced through `sync`,
     // then live recording until `disconnected`.
-    let disconnected = (now - 134 * MINUTE_MS).max(today_start + 30 * MINUTE_MS);
+    // Never in the future, even just after midnight.
+    let disconnected = (now - 134 * MINUTE_MS).max(today_start + 30 * MINUTE_MS).min(now);
     let sync = (now - 6 * 60 * MINUTE_MS).max(today_start).min(disconnected - 20 * MINUTE_MS);
 
     let mut journal = vec![];

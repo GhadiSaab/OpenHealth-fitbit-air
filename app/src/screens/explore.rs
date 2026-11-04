@@ -494,7 +494,8 @@ fn additive_day(app: &App, metric: Metric, ms: &Arc<Vec<Measurement>>, day: Naiv
             }
         })
         .collect();
-    let counters = ms.iter().any(|m| m.kind == airspace_core::SampleKind::CumulativeCounter);
+    // Only when a running counter actually produced this day's value.
+    let counters = !daily_only && ms.iter().any(|m| m.kind == airspace_core::SampleKind::CumulativeCounter && airspace_core::aggregate::day_of(m, &tz) == day);
     let rows: Vec<Vec<String>> = buckets.iter().map(|b| vec![b.label.clone(), b.text.clone()]).collect();
     let title = format!("{} per hour on {}", catalog::info(metric).title, day_short(day));
     // Time with no records at all (e.g. charging, disconnected) is a gap, not zero.
