@@ -1,7 +1,37 @@
 [package]
-name="airspace-app"
-version="0.1.0"
-edition="2024"
+name = "airspace-app"
+description = "Airspace user interface (Leptos, compiled to WebAssembly). Runs as a PWA and inside the Tauri Android shell."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
 [[bin]]
-name="airspace-app"
-path="src/main.rs"
+name = "airspace-app"
+path = "src/main.rs"
+
+[dependencies]
+airspace-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+leptos = { version = "0.8.23", features = ["csr"] }
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4.80"
+js-sys = "0.3.107"
+serde-wasm-bindgen = "0.6.5"
+console_error_panic_hook = "0.1.7"
+
+[dependencies.web-sys]
+version = "0.3.107"
+features = [
+  "Window", "Document", "Element", "HtmlElement", "HtmlDocument", "Node", "Storage", "Location", "History",
+  "HtmlInputElement", "HtmlTextAreaElement", "HtmlSelectElement", "HtmlAnchorElement", "HtmlDialogElement",
+  "File", "FileList", "Blob", "BlobPropertyBag", "Url",
+  "MediaQueryList", "Navigator", "Performance",
+  "Request", "RequestInit", "RequestMode", "Headers", "Response",
+  "Event", "EventTarget", "KeyboardEvent", "PointerEvent", "MouseEvent", "DomRect", "SvgElement", "SvgsvgElement", "CssStyleDeclaration", "DomTokenList",
+  "IdbFactory", "IdbDatabase", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode",
+  "IdbObjectStore", "IdbObjectStoreParameters", "IdbIndex", "IdbIndexParameters", "IdbKeyRange", "IdbVersionChangeEvent",
+  "IdbCursorWithValue", "IdbCursorDirection", "DomException", "ServiceWorkerContainer",
+]

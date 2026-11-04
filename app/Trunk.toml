@@ -1,0 +1,10 @@
+[build]
+target = "index.html"
+dist = "dist"
+# Relative URLs so the same build works as a PWA under any path and inside Tauri.
+public_url = "./"
+filehash = true
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8080

@@ -1,0 +1,102 @@
+/* Airspace design tokens. Documented in docs/DESIGN.md.
+ * Chart colors validated with the dataviz palette checker (lightness band,
+ * chroma floor, CVD separation, contrast) in both themes. */
+
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  /* Type */
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-xs: 0.8125rem;   /* 13 */
+  --fs-sm: 0.875rem;    /* 14 */
+  --fs-md: 1rem;        /* 16 */
+  --fs-lg: 1.1875rem;   /* 19 */
+  --fs-xl: 1.5rem;      /* 24 */
+  --fs-2xl: 2rem;       /* 32 */
+  --fs-hero: 3rem;      /* 48 */
+  --lh: 1.45;
+
+  /* Spacing scale (4-pt) */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px; --s10: 40px; --s12: 48px;
+
+  /* Shape and depth */
+  --r-sm: 10px; --r-md: 16px; --r-lg: 22px; --r-pill: 999px;
+  --touch: 48px;
+
+  /* Motion */
+  --t-fast: 150ms; --t-med: 220ms; --t-slow: 300ms;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+
+  /* Light theme (warm ivory) */
+  --page: #F6F3EC;
+  --surface: #FFFDF8;
+  --surface-2: #EFEBE2;
+  --surface-3: #E6E1D6;
+  --ink: #1A1A18;
+  --ink-2: #4A4843;
+  --muted: #66635D;          /* ≥ 5:1 on surface — never "tiny gray" */
+  --line: #E1DDD2;
+  --grid: #E4E0D6;
+  --axis: #B9B4A8;
+  --focus: #2A63C8;
+  --shadow: 0 1px 2px rgb(40 34 20 / .06), 0 4px 16px rgb(40 34 20 / .05);
+
+  --activity: #1F8A5B;
+  --sleep: #6E56CF;
+  --heart: #D2604F;
+  --oxygen: #2B7BB9;
+  --variability: #A8781F;
+  --temperature: #B8467F;
+  --breath: #0B93A6;
+
+  --activity-wash: rgb(31 138 91 / .10);
+  --tone-wash-alpha: .10;
+
+  --stage-awake: #EB6834;
+  --stage-rem: #2A78D6;
+  --stage-light: #1BAF7A;
+  --stage-deep: #6250D6;
+
+  --ok: #1B7A3E;
+  --warn: #9A6200;
+  --danger: #B42F2F;
+  --danger-wash: #FBE9E6;
+  --notice: #F4EDDC;
+  --on-accent: #FFFFFF;
+  --accent: #1F8A5B;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #121314; --surface: #1C1D1F; --surface-2: #26272A; --surface-3: #303135;
+    --ink: #F2F0EB; --ink-2: #CFCCC4; --muted: #A9A69E; --line: #2E2F33; --grid: #2C2D30; --axis: #4A4B50;
+    --focus: #8DB4FF; --shadow: 0 1px 2px rgb(0 0 0 / .4);
+    --activity: #2FA472; --sleep: #8A75E6; --heart: #D0604F; --oxygen: #4A93D6; --variability: #AE7F25; --temperature: #C0609A; --breath: #1C9FAE;
+    --stage-awake: #D95926; --stage-rem: #3987E5; --stage-light: #199E70; --stage-deep: #9085E9;
+    --ok: #4CC27A; --warn: #E0A43A; --danger: #F07A6E; --danger-wash: #3A2220; --notice: #2B2820; --accent: #2FA472; --on-accent: #0E1410;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #121314; --surface: #1C1D1F; --surface-2: #26272A; --surface-3: #303135;
+  --ink: #F2F0EB; --ink-2: #CFCCC4; --muted: #A9A69E; --line: #2E2F33; --grid: #2C2D30; --axis: #4A4B50;
+  --focus: #8DB4FF; --shadow: 0 1px 2px rgb(0 0 0 / .4);
+  --activity: #2FA472; --sleep: #8A75E6; --heart: #D0604F; --oxygen: #4A93D6; --variability: #AE7F25; --temperature: #C0609A; --breath: #1C9FAE;
+  --stage-awake: #D95926; --stage-rem: #3987E5; --stage-light: #199E70; --stage-deep: #9085E9;
+  --ok: #4CC27A; --warn: #E0A43A; --danger: #F07A6E; --danger-wash: #3A2220; --notice: #2B2820; --accent: #2FA472; --on-accent: #0E1410;
+  color-scheme: dark;
+}
+
+.tone-activity { --tone: var(--activity); }
+.tone-sleep { --tone: var(--sleep); }
+.tone-heart { --tone: var(--heart); }
+.tone-oxygen { --tone: var(--oxygen); }
+.tone-variability { --tone: var(--variability); }
+.tone-temperature { --tone: var(--temperature); }
+.tone-breath { --tone: var(--breath); }

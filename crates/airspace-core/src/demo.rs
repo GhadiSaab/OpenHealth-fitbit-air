@@ -306,15 +306,15 @@ pub fn generate(end_day: NaiveDate, tz: &Tz, now: i64) -> DemoDataset {
             let in_charge = i == CHARGING_DAY && q >= charge.0 && q < charge.1;
             let awake_hours = (420.0..1380.0).contains(&m);
             let mut steps = if awake_hours && !in_charge {
-                let base = if ill { 25.0 } else if travel.contains(&i) { 60.0 } else { 140.0 };
+                let base = if ill { 15.0 } else if travel.contains(&i) { 35.0 } else { 70.0 };
                 let commute = ((480.0..525.0).contains(&m) || (1050.0..1090.0).contains(&m)) && !weekend;
                 let lunch = (750.0..795.0).contains(&m);
-                (base + if commute { 950.0 } else { 0.0 } + if lunch { 700.0 } else { 0.0 }) * rng.n(1.0, 0.35).max(0.0)
+                (base + if commute { 520.0 } else { 0.0 } + if lunch { 420.0 } else { 0.0 }) * rng.n(1.0, 0.35).max(0.0)
             } else {
                 0.0
             };
             if workout && q >= workout_start - 15 * MINUTE_MS && q < workout_end {
-                steps += 1500.0 * rng.n(1.0, 0.1);
+                steps += 1100.0 * rng.n(1.0, 0.1);
             }
             let steps = steps.round();
             let live = is_today && q >= sync;

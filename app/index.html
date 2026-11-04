@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#F6F3EC" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Airspace — a private, local-first fitness companion." />
+    <title>Airspace</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link data-trunk rel="css" href="style/tokens.css" />
+    <link data-trunk rel="css" href="style/app.css" />
+    <link data-trunk rel="copy-dir" href="public/fonts" />
+    <link data-trunk rel="copy-dir" href="public/icons" />
+    <link data-trunk rel="copy-file" href="public/sw.js" />
+    <link data-trunk rel="copy-file" href="public/manifest.webmanifest" />
+    <link data-trunk rel="rust" data-bin="airspace-app" data-wasm-opt="z" />
+  </head>
+  <body>
+    <noscript>Airspace needs JavaScript and WebAssembly to run.</noscript>
+  </body>
+</html>

@@ -427,7 +427,51 @@ fn max_per_minute(metric: Metric) -> f64 {
     }
 }
 
+/// One accepted increment of an additive metric: `[from, to)` and amount.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Increment {
+    pub from: i64,
+    pub to: i64,
+    pub value: f64,
+}
+
+/// The increments that make up a day's additive total, after source
+/// precedence and overlap removal. Used for intraday charts so they always
+/// agree with the daily total.
+pub fn additive_increments(metric: Metric, day: NaiveDate, ms: &[&Measurement], ctx: &SummaryContext) -> Vec<Increment> {
+    let mut s = DaySummary {
+        day: time::day_key(day),
+        metric,
+        value: None,
+        min: None,
+        max: None,
+        count: 0,
+        coverage: None,
+        method: String::new(),
+        origins: vec![],
+        latest_ts: None,
+        provisional: false,
+        extra: None,
+        calc_version: CALC_VERSION,
+        demo: ctx.demo,
+    };
+    let ms: Vec<&Measurement> = if metric == Metric::Calories {
+        // Mirror the scope choice made for the daily total.
+        let pick = |sc: CalorieScope| ms.iter().copied().filter(|m| m.calorie_scope() == sc).collect::<Vec<_>>();
+        let t = pick(CalorieScope::Total);
+        if !t.is_empty() { t } else { let u = pick(CalorieScope::Unspecified); if !u.is_empty() { u } else { pick(CalorieScope::Active) } }
+    } else {
+        ms.to_vec()
+    };
+    additive_with(&mut s, day, &ms, ctx)
+}
+
 fn additive(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &SummaryContext) {
+    additive_with(s, day, ms, ctx);
+}
+
+fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &SummaryContext) -> Vec<Increment> {
+    let mut incs = vec![];
     let (ds, de) = time::day_bounds(day, &ctx.tz);
     let mut groups: BTreeMap<(u8, String), Vec<&Measurement>> = BTreeMap::new();
     for m in ms {
@@ -459,6 +503,7 @@ fn additive(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &Summa
                 // Several daily totals from one source: use the most recently ingested.
                 let latest = g.iter().max_by_key(|m| m.prov.ingested_at).unwrap();
                 total = latest.value;
+                incs.push(Increment { from: ds, to: de, value: total });
                 overlapped += g.len() as u32 - 1;
                 extend(ds, de, &mut span);
                 contributed = true;
@@ -474,6 +519,7 @@ fn additive(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &Summa
                         continue;
                     }
                     total += m.value;
+                    incs.push(Increment { from: a, to: b, value: m.value });
                     last_end = b;
                     extend(a, b, &mut span);
                     contributed = true;
@@ -510,6 +556,7 @@ fn additive(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &Summa
                         continue;
                     }
                     total += inc;
+                    incs.push(Increment { from: a, to: b, value: inc });
                     extend(a, b, &mut span);
                     contributed = true;
                 }
@@ -546,6 +593,7 @@ fn additive(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &Summa
         };
     }
     s.extra = Some(SummaryExtra::Additive { parts, overlapped, rejected_jumps: rejected, calorie_scope: None, active: None });
+    incs
 }
 
 /// In-memory index of summaries for quick lookups by the UI.

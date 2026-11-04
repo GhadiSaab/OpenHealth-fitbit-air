@@ -23,7 +23,7 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
-strip = true
+strip = "debuginfo"
 
 [profile.release.package.airspace-core]
 opt-level = 3
