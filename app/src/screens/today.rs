@@ -98,6 +98,7 @@ fn StatusStrip() -> impl IntoView {
                 "warn",
                 format!("Demo device · disconnected {} · not recording", time::fmt_ago(d.disconnected_at, now)),
             ),
+            _ if app.summaries.with(|i| i.is_empty()) => ("off", "Not connected · nothing imported yet".to_string()),
             _ => ("off", "Not connected · showing imported history".to_string()),
         }
     };
@@ -132,9 +133,13 @@ fn DaySummaryText() -> impl IntoView {
                 parts.push(format!("you slept {}", time::fmt_minutes(v)));
             }
             if let Some(v) = idx.value(Metric::RestingHeartRate, day) {
-                parts.push(format!("resting heart rate was {}", format::value(Metric::RestingHeartRate, v, &s)));
+                parts.push(format!("your resting heart rate was {}", format::value(Metric::RestingHeartRate, v, &s)));
             }
-            let mut out = parts.join(", ");
+            // "A, B and C."
+            let mut out = match parts.len() {
+                0 | 1 => parts.join(""),
+                n => format!("{} and {}", parts[..n - 1].join(", "), parts[n - 1]),
+            };
             out.push('.');
             if !Metric::ALL.iter().any(|m| idx.get(*m, day).is_some()) {
                 out = format!("Nothing was recorded on {}. Missing days are shown as gaps.", day_short(day));
@@ -162,8 +167,8 @@ fn StepsHero() -> impl IntoView {
                         <Ring fraction=v / goal.max(1.0) tone="activity" size=112.0 />
                         <div class="hero-text">
                             <span class="tile-label"><Icon name="steps" size=18 />"Steps"</span>
-                            <span class="hero-value tabular">{format::value(Metric::Steps, v, &s).replace(" steps", "")}</span>
-                            <span class="tile-sub">{format!("{:.0}% of {} goal", v / goal.max(1.0) * 100.0, format::value(Metric::Steps, goal, &s).replace(" steps", ""))}</span>
+                            <span class="hero-value tabular">{format::value(Metric::Steps, v, &s).replace("\u{a0}steps", "")}</span>
+                            <span class="tile-sub">{format!("{:.0}% of {} goal", v / goal.max(1.0) * 100.0, format::value(Metric::Steps, goal, &s).replace("\u{a0}steps", ""))}</span>
                             {prov.then(|| view! { <span class="pill prov" title="Includes provisional live values">"Includes provisional values"</span> })}
                         </div>
                     }.into_any(),
@@ -207,10 +212,10 @@ fn HeartTile() -> impl IntoView {
                             };
                             let (lo, hi) = v.iter().fold((f64::MAX, f64::MIN), |(a, b), m| (a.min(m.value), b.max(m.value)));
                             view! {
-                                <span class="tile-value tabular">{format!("{}", last.value.round())}<small>" bpm"</small></span>
+                                <span class="tile-value tabular">{format!("{}", last.value.round())}<small>"\u{a0}bpm"</small></span>
                                 <span class="tile-sub tabular">{format!("Measured at {}", time::format_ts(last.start, &tz, "%H:%M"))}</span>
                                 <span class=format!("pill {cls}")>{pill}</span>
-                                <span class="tile-sub tabular">{format!("Range {}–{} bpm", lo.round(), hi.round())}</span>
+                                <span class="tile-sub tabular">{format!("Range {}–{}\u{a0}bpm", lo.round(), hi.round())}</span>
                             }.into_any()
                         }
                     },
@@ -236,7 +241,14 @@ fn SleepTile() -> impl IntoView {
                     Some(sm) => {
                         let v = sm.value.unwrap_or(0.0);
                         let sday = time::parse_day(&sm.day).unwrap_or(day);
-                        let when = if sday == day { "Last night".to_string() } else { format!("Most recent: night before {}", day_short(sday)) };
+                        // "Last night" only for today; past days name the night explicitly.
+                        let when = if sday == day && day == app.today() {
+                            "Last night".to_string()
+                        } else if sday == day {
+                            format!("Night ending {}", day_short(sday))
+                        } else {
+                            format!("Most recent: night ending {}", day_short(sday))
+                        };
                         let (bed, wake, stages) = match &sm.extra {
                             Some(SummaryExtra::Sleep { bed, wake, stage_minutes, stages_measured, .. }) => (Some(*bed), Some(*wake), stages_measured.then(|| stage_minutes.clone())),
                             _ => (None, None, None),
@@ -277,10 +289,19 @@ fn PairTiles() -> impl IntoView {
                     let d = app.day.get();
                     let s = app.settings.get();
                     match app.summaries.with(|i| i.get(m, d).cloned()) {
-                        Some(sm) if sm.value.is_some() => view! {
-                            <span class="tile-value tabular">{if sm.provisional { "≈ " } else { "" }}{format::value(m, sm.value.unwrap(), &s)}</span>
-                            {(m == Metric::Calories).then(|| view! { <span class="tile-sub">{calorie_scope_label(&sm.extra)}</span> })}
-                        }.into_any(),
+                        Some(sm) if sm.value.is_some() => {
+                            let partial = d == app.today();
+                            let sub = match (partial, sm.provisional, m) {
+                                (true, true, _) => "So far today · live estimate".to_string(),
+                                (true, false, _) => "So far today".to_string(),
+                                (false, _, Metric::Calories) => calorie_scope_label(&sm.extra).to_string(),
+                                _ => String::new(),
+                            };
+                            view! {
+                                <span class="tile-value tabular">{if sm.provisional { "≈\u{a0}" } else { "" }}{format::value(m, sm.value.unwrap(), &s)}</span>
+                                {(!sub.is_empty()).then(|| view! { <span class="tile-sub">{sub}</span> })}
+                            }.into_any()
+                        }
                         _ => view! { <span class="tile-value muted">"—"</span><span class="tile-sub">"No data"</span> }.into_any(),
                     }
                 }}
@@ -297,7 +318,7 @@ fn calorie_scope_label(extra: &Option<SummaryExtra>) -> &'static str {
     match extra {
         Some(SummaryExtra::Additive { calorie_scope: Some(airspace_core::CalorieScope::Total), .. }) => "Total, incl. resting",
         Some(SummaryExtra::Additive { calorie_scope: Some(airspace_core::CalorieScope::Active), .. }) => "Active only",
-        _ => "Type not specified by source",
+        _ => "",
     }
 }
 
@@ -399,7 +420,7 @@ fn FavoriteTiles() -> impl IntoView {
                                         let d = time::parse_day(&sm.day).unwrap_or(day);
                                         view! {
                                             <span class="tile-value tabular">{format::value(m, sm.value.unwrap_or(0.0), &s)}</span>
-                                            <span class="tile-sub">{if d == day { "This day".to_string() } else { format!("Latest: {}", day_short(d)) }}</span>
+                                            <span class="tile-sub">{if d == app.today() { "Today".to_string() } else if d == day { day_short(d) } else { format!("Latest: {}", day_short(d)) }}</span>
                                         }.into_any()
                                     }
                                     None => view! { <span class="tile-value muted">"—"</span><span class="tile-sub">"No data"</span> }.into_any(),

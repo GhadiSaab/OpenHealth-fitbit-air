@@ -70,10 +70,8 @@ impl AiConfig {
         if self.model.trim().is_empty() {
             return Err("Enter a model name.".into());
         }
-        let lower = e.to_ascii_lowercase();
-        let loopback = ["http://localhost", "http://127.0.0.1", "http://[::1]"].iter().any(|p| lower.starts_with(p));
-        if !lower.starts_with("https://") && !loopback {
-            return Err("The endpoint must start with https://".into());
+        if !endpoint_url_allowed(e) {
+            return Err("The endpoint must start with https:// (plain http:// only for localhost).".into());
         }
         let rest = &e[e.find("://").map(|i| i + 3).unwrap_or(0)..];
         if rest.is_empty() || rest.starts_with('/') {
@@ -90,6 +88,28 @@ impl AiConfig {
 
     fn base(&self) -> &str {
         self.endpoint.trim().trim_end_matches('/')
+    }
+}
+
+/// The host part of an http(s) URL, lower-cased, without port or credentials.
+fn url_host(url: &str) -> Option<(String, String)> {
+    let (scheme, rest) = url.trim().split_once("://")?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host_port = authority.rsplit('@').next()?;
+    let host = if let Some(stripped) = host_port.strip_prefix('[') {
+        format!("[{}]", stripped.split(']').next()?)
+    } else {
+        host_port.split(':').next()?.to_string()
+    };
+    Some((scheme.to_ascii_lowercase(), host.to_ascii_lowercase()))
+}
+
+/// HTTPS to any host, or plain HTTP only to this device (localhost,
+/// 127.0.0.1 or [::1] exactly). Used by both the UI and the native layer.
+pub fn endpoint_url_allowed(url: &str) -> bool {
+    match url_host(url) {
+        Some((scheme, host)) if !host.is_empty() => scheme == "https" || (scheme == "http" && matches!(host.as_str(), "localhost" | "127.0.0.1" | "[::1]")),
+        _ => false,
     }
 }
 
@@ -306,7 +326,7 @@ fn round1(v: f64) -> f64 {
 }
 
 /// Compact daily summaries for the selected dates and metrics — never raw samples.
-pub fn build_context(idx: &SummaryIndex, journal: &[JournalEntry], sel: &ConsentSelection, settings: &Settings) -> SharedContext {
+pub fn build_context(idx: &SummaryIndex, journal: &[JournalEntry], sel: &ConsentSelection, settings: &Settings, today: NaiveDate) -> SharedContext {
     let from = time::parse_day(&sel.from).unwrap_or_default();
     let to = time::parse_day(&sel.to).unwrap_or(from);
     let mut days = vec![];
@@ -358,6 +378,10 @@ pub fn build_context(idx: &SummaryIndex, journal: &[JournalEntry], sel: &Consent
             if s.provisional {
                 row.insert(format!("{}_provisional", m.key()), json!(true));
             }
+            // Today's totals are still growing; say so instead of letting them look low.
+            if d == today && (m.is_additive() || matches!(m, Metric::HeartRate | Metric::HeartRateZones)) {
+                row.insert(format!("{}_partial_day_so_far", m.key()), json!(true));
+            }
         }
         let entry = sel.include_journal.then(|| journal.iter().find(|e| e.day == time::day_key(d))).flatten();
         if let Some(e) = entry {
@@ -379,7 +403,7 @@ pub fn build_context(idx: &SummaryIndex, journal: &[JournalEntry], sel: &Consent
     let doc = json!({
         "period": {"from": sel.from, "to": sel.to},
         "goals": {"steps": settings.step_goal, "sleep_min": settings.sleep_goal_min},
-        "notes": "Values are daily summaries from a wrist tracker. Days marked no_data had no recording; that is unknown, not zero. Skin temperature is a deviation from the user's baseline, not body temperature. Provisional values come from an unvalidated live data mapping.",
+        "notes": "Values are daily summaries from a wrist tracker. Fields ending _partial_day_so_far are today's incomplete totals. Days marked no_data had no recording; that is unknown, not zero. Skin temperature is a deviation from the user's baseline, not body temperature. Provisional values come from an unvalidated live data mapping.",
         "days": days,
     });
     let json_s = doc.to_string();
@@ -423,6 +447,12 @@ mod tests {
         assert!(c.validate().is_err());
         c.endpoint = "https://user:pw@api.example.com".into();
         assert!(c.validate().is_err());
+        for bad in ["http://localhost.attacker.example", "http://127.0.0.1.evil.example/v1", "http://localhost@evil.example", "ftp://localhost"] {
+            assert!(!endpoint_url_allowed(bad), "{bad}");
+        }
+        for good in ["http://localhost:11434/v1", "http://127.0.0.1:8080", "http://[::1]:9000/v1", "https://api.example.com/v1"] {
+            assert!(endpoint_url_allowed(good), "{good}");
+        }
     }
 
     #[test]
@@ -467,7 +497,8 @@ mod tests {
             &crate::aggregate::SummaryContext { tz: Tz::UTC, now: i64::MAX / 2, demo: true },
         ));
         let sel = ConsentSelection { from: "2026-10-24".into(), to: "2026-10-30".into(), metrics: vec![Metric::Steps], include_journal: false };
-        let ctx = build_context(&idx, &ds.journal, &sel, &Settings::default());
+        let ctx = build_context(&idx, &ds.journal, &sel, &Settings::default(), end);
+        assert!(ctx.json.contains("steps_partial_day_so_far"));
         assert!(ctx.json.contains("\"steps\""));
         assert!(!ctx.json.contains("sleep_asleep_min"));
         assert!(!ctx.json.contains("journal_note"));

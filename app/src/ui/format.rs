@@ -37,5 +37,18 @@ pub fn delta(metric: Metric, d: f64, s: &Settings) -> String {
 }
 
 pub fn plural(n: usize, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
+    format!("{}\u{a0}{}", count(n), if n == 1 { one } else { many })
+}
+
+/// "46,393"
+pub fn count(n: usize) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }

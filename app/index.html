@@ -19,6 +19,18 @@
     <link data-trunk rel="rust" data-bin="airspace-app" data-wasm-opt="z" />
   </head>
   <body>
+    <!-- Theme before first paint: no light flash for dark-mode users. -->
+    <script>
+      (function () {
+        var t = "system";
+        try { t = (JSON.parse(localStorage.getItem("airspace.settings.v1") || "{}").theme) || "system"; } catch (e) {}
+        var dark = t === "dark" || (t === "system" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+        var m = document.querySelector("meta[name=theme-color]");
+        if (m) m.setAttribute("content", dark ? "#121314" : "#F6F3EC");
+      })();
+    </script>
+    <div id="preboot" class="preboot" aria-hidden="true"><div class="preboot-mark"></div>Airspace</div>
     <noscript>Airspace needs JavaScript and WebAssembly to run.</noscript>
   </body>
 </html>

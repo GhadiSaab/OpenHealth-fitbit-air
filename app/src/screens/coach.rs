@@ -51,14 +51,14 @@ fn LocalInsights() -> impl IntoView {
                     <ul class="insight-list">
                         {list.into_iter().map(|ins| {
                             let m = ins.metric;
-                            let arrow = match ins.direction { Direction::Up => "↑", Direction::Down => "↓", Direction::Steady => "→", Direction::Info => "" };
+                            let arrow = match ins.direction { Direction::Up => "Higher", Direction::Down => "Lower", Direction::Steady => "Steady", Direction::Info => "" };
                             let tone = catalog::info(m).tone.css();
                             view! {
                                 <li class=format!("insight tone-{tone}")>
                                     <div class="insight-head">
                                         <span class="metric-icon"><Icon name=metric_icon(m) size=18 /></span>
                                         <h3>{ins.title.clone()}</h3>
-                                        {(!arrow.is_empty()).then(|| view! { <span class="trend-arrow" aria-hidden="true">{arrow}</span> })}
+                                        {(!arrow.is_empty()).then(|| view! { <span class="trend-pill">{arrow}</span> })}
                                     </div>
                                     <p>{ins.body.clone()}</p>
                                     <p class="muted tabular">
@@ -148,7 +148,8 @@ fn Consent(question: String, pending: RwSignal<Option<String>>, turns: RwSignal<
     let ctx = Memo::new(move |_| {
         let s = sel();
         let settings = app.settings.get();
-        app.summaries.with(|i| app.journal.with(|j| ai::build_context(i, j, &s, &settings)))
+        let today = app.today_untracked();
+        app.summaries.with(|i| app.journal.with(|j| ai::build_context(i, j, &s, &settings, today)))
     });
     let q = question.clone();
     let send = move || {
@@ -216,6 +217,14 @@ fn Consent(question: String, pending: RwSignal<Option<String>>, turns: RwSignal<
             </div>
             <div class="btn-row">
                 <button class="btn primary" disabled=move || ctx.with(|c| c.days_with_data == 0) on:click=move |_| send()>"Share and ask"</button>
+                {move || ctx.with(|c| c.days_with_data == 0).then(|| {
+                    let last = app.summaries.with(|i| i.last_day());
+                    view! {
+                        <p class="muted" role="status">"There's no recorded data in these dates, so there's nothing to share."
+                            {last.map(|d| view! { " " <button class="link" on:click=move |_| { from.set(time::day_key(d - chrono::Duration::days(6))); to.set(time::day_key(d)); }>{format!("Use the 7 days up to {}", day_short(d))}</button> })}
+                        </p>
+                    }
+                })}
                 <button class="btn quiet" on:click=move |_| pending.set(None)>"Cancel"</button>
             </div>
         </div>
@@ -248,6 +257,11 @@ pub async fn execute(app: &crate::state::App, provider: AiProviderKind, spec: Ht
         Ok(r)
     } else {
         let key = app.ai_key_mem.get_untracked().ok_or("No API key in this session.")?;
+        // The key only goes to the endpoint it was entered for.
+        let bound = app.ai_key_endpoint.get_untracked().unwrap_or_default();
+        if !ai::url_matches_endpoint(&spec.url, &bound) {
+            return Err("This request isn't for the endpoint your key was entered with. Enter the key again for the new endpoint.".into());
+        }
         let mut headers = spec.headers.clone();
         headers.push(ai::provider(provider).auth_header(&key));
         platform::http(&spec.method, &spec.url, &headers, spec.body.as_deref()).await
@@ -267,7 +281,7 @@ fn Conversation(turns: RwSignal<Vec<Turn>>) -> impl IntoView {
                             <div class="ai-answer">
                                 <p class="ai-label"><Icon name="coach" size=16 />{format!("AI-generated · {}", t.provider)}</p>
                                 {match t.answer.clone() {
-                                    None => view! { <p class="muted" aria-busy="true">"Waiting for the provider…"</p> }.into_any(),
+                                    None => view! { <p class="muted" aria-busy="true"><span class="inline-spinner" aria-hidden="true"></span>"Waiting for the provider…"</p> }.into_any(),
                                     Some(Ok(a)) => view! { <div class="ai-text">{a.split("\n\n").map(|p| view! { <p>{p.to_string()}</p> }).collect_view()}</div> }.into_any(),
                                     Some(Err(e)) => view! { <p class="error-text" role="alert">{e}</p> }.into_any(),
                                 }}
@@ -295,6 +309,11 @@ pub fn AiSettings() -> impl IntoView {
     let testing = RwSignal::new(false);
     let cfg = move || AiConfig { provider: provider.get(), endpoint: endpoint.get().trim().to_string(), model: model.get().trim().to_string() };
     let validation = move || cfg().validate().err();
+    // Endpoint problems are shown under the endpoint field itself.
+    let endpoint_error = move || {
+        let e = endpoint.get();
+        (!e.trim().is_empty() && !ai::endpoint_url_allowed(e.trim())).then(|| "Use an https:// address (plain http:// only for localhost).".to_string())
+    };
     let has_key = move || key_available(&app);
 
     let save = move || {
@@ -314,7 +333,14 @@ pub fn AiSettings() -> impl IntoView {
                     app.ai_native_key.set(true);
                 } else {
                     app.ai_key_mem.set(Some(k.trim().to_string()));
+                    app.ai_key_endpoint.set(Some(c.endpoint.clone()));
                 }
+            }
+            else if !is_tauri() && app.ai_key_mem.get_untracked().is_some()
+                && app.ai_key_endpoint.get_untracked().map(|b| b.trim_end_matches('/') != c.endpoint.trim().trim_end_matches('/')).unwrap_or(false)
+            {
+                status.set(Some(Err("Your key was entered for a different endpoint. Enter the key again to use it with this one.".into())));
+                return;
             }
             else if is_tauri() && app.ai_native_key.get_untracked() {
                 // A stored key stays bound to the endpoint it was entered for.
@@ -365,6 +391,7 @@ pub fn AiSettings() -> impl IntoView {
                 app.ai_native_key.set(false);
             }
             app.ai_key_mem.set(None);
+            app.ai_key_endpoint.set(None);
             status.set(Some(Ok("Key deleted.".into())));
         });
     };
@@ -411,7 +438,9 @@ pub fn AiSettings() -> impl IntoView {
             </div>
             <label class="field"><span class="field-label">"HTTPS endpoint"</span>
                 <input type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://api.example.com/v1"
-                    prop:value=move || endpoint.get() on:input=move |ev| endpoint.set(event_target_value(&ev)) /></label>
+                    aria-invalid=move || endpoint_error().is_some().then_some("true") aria-describedby="endpoint-error"
+                    prop:value=move || endpoint.get() on:input=move |ev| endpoint.set(event_target_value(&ev)) />
+                {move || endpoint_error().map(|e| view! { <span class="field-error" id="endpoint-error">{e}</span> })}</label>
             <label class="field"><span class="field-label">"Model"</span>
                 <input type="text" autocomplete="off" spellcheck="false" list="model-suggestions" prop:value=move || model.get() on:input=move |ev| model.set(event_target_value(&ev)) /></label>
             <datalist id="model-suggestions">
@@ -427,7 +456,7 @@ pub fn AiSettings() -> impl IntoView {
             } else {
                 "In the browser the key is kept in memory only for this session. It is never written to storage, included in backups, or cached by the service worker."
             }}</p>
-            {move || validation().map(|e| view! { <p class="error-text" role="alert">{e}</p> })}
+            {move || validation().filter(|_| endpoint_error().is_none()).map(|e| view! { <p class="error-text" role="alert">{e}</p> })}
             <div class="btn-row">
                 <button class="btn primary" disabled=move || validation().is_some() on:click=move |_| save()>"Save"</button>
                 <button class="btn" disabled=move || validation().is_some() || testing.get() on:click=move |_| test()>{move || if testing.get() { "Testing…" } else { "Test connection" }}</button>

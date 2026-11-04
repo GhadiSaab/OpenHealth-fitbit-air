@@ -167,6 +167,28 @@ pub fn focus_selector(sel: &str) {
     }
 }
 
+pub fn scroll_into_view(sel: &str) {
+    if let Some(el) = window().document().and_then(|d| d.query_selector(sel).ok().flatten()) {
+        let opts = web_sys::ScrollIntoViewOptions::new();
+        opts.set_block(web_sys::ScrollLogicalPosition::Center);
+        el.scroll_into_view_with_scroll_into_view_options(&opts);
+    }
+}
+
+pub fn scroll_y() -> f64 {
+    window().scroll_y().unwrap_or(0.0)
+}
+
+pub struct ScrollMemory(pub f64);
+
+thread_local! {
+    static SCROLL_MEMORY: std::cell::RefCell<ScrollMemory> = const { std::cell::RefCell::new(ScrollMemory(0.0)) };
+}
+
+pub fn with_scroll_memory<T>(f: impl FnOnce(&mut ScrollMemory) -> T) -> T {
+    SCROLL_MEMORY.with(|m| f(&mut m.borrow_mut()))
+}
+
 pub fn scroll_top() {
     window().scroll_to_with_x_and_y(0.0, 0.0);
 }

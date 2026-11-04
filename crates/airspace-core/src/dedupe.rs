@@ -146,6 +146,21 @@ pub struct MergePlan {
 }
 
 pub fn plan_merge(incoming: Vec<Measurement>, classes: &[Classification], policy: ConflictPolicy) -> MergePlan {
+    let mut plan = plan_merge_inner(incoming, classes, policy);
+    // A conflict can be between two records of the same file. Then the
+    // "existing" record is also being inserted: mark it superseded there.
+    let mut rest = vec![];
+    for (old, new) in std::mem::take(&mut plan.supersede) {
+        match plan.insert.iter_mut().find(|m| m.id == old) {
+            Some(m) => m.superseded_by = Some(new),
+            None => rest.push((old, new)),
+        }
+    }
+    plan.supersede = rest;
+    plan
+}
+
+fn plan_merge_inner(incoming: Vec<Measurement>, classes: &[Classification], policy: ConflictPolicy) -> MergePlan {
     let mut plan = MergePlan::default();
     for (m, c) in incoming.into_iter().zip(classes) {
         match c {

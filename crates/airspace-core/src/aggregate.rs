@@ -148,19 +148,68 @@ pub fn day_of(m: &Measurement, tz: &Tz) -> NaiveDate {
     }
 }
 
+type CounterKey = (Metric, Origin, String, bool);
+
+fn resets_daily(m: &Measurement) -> bool {
+    matches!(m.detail, Some(Detail::Counter { resets_daily: true }))
+}
+
+/// The neighbouring counter readings just before and just after a day, for
+/// each counter series. They let an increment that spans midnight be shared
+/// between the two days instead of being lost.
+fn counter_context<'a>(series: &HashMap<CounterKey, Vec<&'a Measurement>>, metric: Metric, day: NaiveDate, tz: &Tz) -> Vec<&'a Measurement> {
+    let (ds, de) = time::day_bounds(day, tz);
+    let mut out = vec![];
+    for ((m, _, _, _), v) in series {
+        if *m != metric {
+            continue;
+        }
+        let i = v.partition_point(|x| x.start < ds);
+        if i > 0 {
+            out.push(v[i - 1]);
+        }
+        let j = v.partition_point(|x| x.start < de);
+        if j < v.len() {
+            out.push(v[j]);
+        }
+    }
+    out
+}
+
+fn counter_series<'a>(items: &[&'a Measurement]) -> HashMap<CounterKey, Vec<&'a Measurement>> {
+    let mut series: HashMap<CounterKey, Vec<&'a Measurement>> = HashMap::new();
+    for m in items.iter().copied().filter(|m| m.kind == SampleKind::CumulativeCounter) {
+        series.entry((m.metric, m.prov.origin, m.prov.source_name.clone(), resets_daily(m))).or_default().push(m);
+    }
+    for v in series.values_mut() {
+        v.sort_by_key(|m| (m.start, m.prov.ingested_at));
+    }
+    series
+}
+
 /// Computes summaries for every (metric, day) present in `items`.
 pub fn summarize(items: &[Measurement], ctx: &SummaryContext) -> Vec<DaySummary> {
+    let active: Vec<&Measurement> = items.iter().filter(|m| m.is_active()).collect();
     let mut groups: BTreeMap<(Metric, NaiveDate), Vec<&Measurement>> = BTreeMap::new();
-    for m in items.iter().filter(|m| m.is_active()) {
+    for m in &active {
         groups.entry((m.metric, day_of(m, &ctx.tz))).or_default().push(m);
     }
+    let series = counter_series(&active);
     groups
         .into_iter()
-        .filter_map(|((metric, day), ms)| summarize_day(metric, day, &ms, ctx))
+        .filter_map(|((metric, day), ms)| {
+            let context = if metric.is_additive() { counter_context(&series, metric, day, &ctx.tz) } else { vec![] };
+            summarize_day_with(metric, day, &ms, &context, ctx)
+        })
         .collect()
 }
 
 pub fn summarize_day(metric: Metric, day: NaiveDate, ms: &[&Measurement], ctx: &SummaryContext) -> Option<DaySummary> {
+    summarize_day_with(metric, day, ms, &[], ctx)
+}
+
+/// Like [`summarize_day`], with neighbouring counter readings from adjacent days.
+pub fn summarize_day_with(metric: Metric, day: NaiveDate, ms: &[&Measurement], context: &[&Measurement], ctx: &SummaryContext) -> Option<DaySummary> {
     if ms.is_empty() {
         return None;
     }
@@ -174,7 +223,13 @@ pub fn summarize_day(metric: Metric, day: NaiveDate, ms: &[&Measurement], ctx: &
         coverage: None,
         method: String::new(),
         origins: unique_origins(ms),
-        latest_ts: ms.iter().map(|m| m.end_or_start()).max(),
+        // For daily totals and intervals the end is exclusive (often next midnight);
+        // show the last moment actually covered instead.
+        latest_ts: ms.iter().map(|m| match m.kind {
+            SampleKind::DailyTotal => m.start,
+            SampleKind::Interval => m.end_or_start() - 1,
+            _ => m.end_or_start(),
+        }).max(),
         provisional: ms.iter().any(|m| m.prov.provisional),
         extra: None,
         calc_version: CALC_VERSION,
@@ -183,9 +238,9 @@ pub fn summarize_day(metric: Metric, day: NaiveDate, ms: &[&Measurement], ctx: &
     match metric {
         Metric::HeartRate => heart_rate(&mut s, day, ms, ctx),
         Metric::Steps | Metric::Distance => {
-            additive(&mut s, day, ms, ctx);
+            additive_with(&mut s, day, ms, context, ctx);
         }
-        Metric::Calories => calories(&mut s, day, ms, ctx),
+        Metric::Calories => calories(&mut s, day, ms, context, ctx),
         Metric::Sleep => sleep(&mut s, ms),
         Metric::HeartRateZones => zones(&mut s, ms),
         Metric::Hrv => hrv(&mut s, ms),
@@ -329,7 +384,9 @@ fn sleep(s: &mut DaySummary, ms: &[&Measurement]) {
             *stage_minutes.entry(st.stage.key().into()).or_default() += (st.end - st.start) as f64 / MINUTE_MS as f64;
         }
     }
-    let naps: Vec<&&&Measurement> = sessions.iter().filter(|m| m.id != main.id).collect();
+    // Other sessions overlapping the main one are alternate versions of the same
+    // night (e.g. "keep both" on import), not naps.
+    let naps: Vec<&&&Measurement> = sessions.iter().filter(|m| m.id != main.id && (m.end_or_start() <= main.start || m.start >= main.end_or_start())).collect();
     s.value = Some(main.value);
     s.count = sessions.len() as u32;
     s.method = if detail.map(|d| d.asleep_minutes_derived).unwrap_or(false) {
@@ -349,7 +406,7 @@ fn sleep(s: &mut DaySummary, ms: &[&Measurement]) {
     });
 }
 
-fn calories(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &SummaryContext) {
+fn calories(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], context: &[&Measurement], ctx: &SummaryContext) {
     let total: Vec<&Measurement> = ms.iter().copied().filter(|m| m.calorie_scope() == CalorieScope::Total).collect();
     let active: Vec<&Measurement> = ms.iter().copied().filter(|m| m.calorie_scope() == CalorieScope::Active).collect();
     let unspecified: Vec<&Measurement> =
@@ -358,7 +415,8 @@ fn calories(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &Summa
         None
     } else {
         let mut tmp = s.clone();
-        additive(&mut tmp, day, &active, ctx);
+        let cx: Vec<&Measurement> = context.iter().copied().filter(|m| m.calorie_scope() == CalorieScope::Active).collect();
+        additive_with(&mut tmp, day, &active, &cx, ctx);
         tmp.value
     };
     let (scope, chosen) = if !total.is_empty() {
@@ -368,7 +426,8 @@ fn calories(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &Summa
     } else {
         (CalorieScope::Active, active)
     };
-    additive(s, day, &chosen, ctx);
+    let cx: Vec<&Measurement> = context.iter().copied().filter(|m| m.calorie_scope() == scope).collect();
+    additive_with(s, day, &chosen, &cx, ctx);
     s.method = match scope {
         CalorieScope::Total => format!("Total calories (including resting energy). {}", s.method),
         CalorieScope::Active => format!("Active calories only. {}", s.method),
@@ -409,6 +468,10 @@ struct Coverage(Vec<(i64, i64)>);
 impl Coverage {
     fn overlaps(&self, a: i64, b: i64) -> bool {
         self.0.iter().any(|&(s, e)| a < e && b > s)
+    }
+    /// How much of `[a, b)` is not yet covered.
+    fn uncovered_len(&self, a: i64, b: i64) -> i64 {
+        (b - a) - union_len(self.0.clone(), a, b)
     }
     fn add(&mut self, a: i64, b: i64) {
         if b > a {
@@ -457,26 +520,53 @@ pub fn additive_increments(metric: Metric, day: NaiveDate, ms: &[&Measurement], 
     };
     let ms: Vec<&Measurement> = if metric == Metric::Calories {
         // Mirror the scope choice made for the daily total.
-        let pick = |sc: CalorieScope| ms.iter().copied().filter(|m| m.calorie_scope() == sc).collect::<Vec<_>>();
-        let t = pick(CalorieScope::Total);
-        if !t.is_empty() { t } else { let u = pick(CalorieScope::Unspecified); if !u.is_empty() { u } else { pick(CalorieScope::Active) } }
+        let in_day: Vec<&Measurement> = ms.iter().copied().filter(|m| day_of(m, &ctx.tz) == day).collect();
+        let has = |sc: CalorieScope| in_day.iter().any(|m| m.calorie_scope() == sc);
+        let sc = if has(CalorieScope::Total) { CalorieScope::Total } else if has(CalorieScope::Unspecified) { CalorieScope::Unspecified } else { CalorieScope::Active };
+        ms.iter().copied().filter(|m| m.calorie_scope() == sc).collect()
     } else {
         ms.to_vec()
     };
-    additive_with(&mut s, day, &ms, ctx)
+    // Records outside the day only serve as counter context.
+    let all: Vec<&Measurement> = ms.iter().copied().filter(|m| m.is_active()).collect();
+    let in_day: Vec<&Measurement> = all.iter().copied().filter(|m| day_of(m, &ctx.tz) == day).collect();
+    let context = counter_context(&counter_series(&all), metric, day, &ctx.tz);
+    additive_with(&mut s, day, &in_day, &context, ctx)
 }
 
-fn additive(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &SummaryContext) {
-    additive_with(s, day, ms, ctx);
+/// Total length of the union of intervals, clipped to `[lo, hi)`.
+fn union_len(mut v: Vec<(i64, i64)>, lo: i64, hi: i64) -> i64 {
+    v.sort_unstable();
+    let mut total = 0;
+    let mut cur: Option<(i64, i64)> = None;
+    for (a, b) in v {
+        let (a, b) = (a.max(lo), b.min(hi));
+        if b <= a {
+            continue;
+        }
+        match cur {
+            Some((x, y)) if a <= y => cur = Some((x, y.max(b))),
+            Some((x, y)) => {
+                total += y - x;
+                cur = Some((a, b));
+            }
+            None => cur = Some((a, b)),
+        }
+    }
+    if let Some((x, y)) = cur {
+        total += y - x;
+    }
+    total
 }
 
-fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &SummaryContext) -> Vec<Increment> {
+fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], context: &[&Measurement], ctx: &SummaryContext) -> Vec<Increment> {
     let mut incs = vec![];
     let (ds, de) = time::day_bounds(day, &ctx.tz);
     let mut groups: BTreeMap<(u8, String), Vec<&Measurement>> = BTreeMap::new();
     for m in ms {
         groups.entry((rank(m.prov.origin, m.kind), m.prov.source_name.clone())).or_default().push(m);
     }
+    let mut all_intervals: Vec<(i64, i64)> = vec![];
     let mut covered = Coverage::default();
     let mut parts = vec![];
     let mut overlapped = 0u32;
@@ -486,13 +576,9 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &
         let origin = g[0].prov.origin;
         g.sort_by_key(|m| (m.start, m.prov.ingested_at));
         let mut total = 0.0;
-        let mut span: Option<(i64, i64)> = None;
-        let extend = |a: i64, b: i64, span: &mut Option<(i64, i64)>| {
-            *span = Some(match *span {
-                None => (a, b),
-                Some((x, y)) => (x.min(a), y.max(b)),
-            });
-        };
+        // The exact intervals this source contributed (coverage uses these, not the span).
+        let mut span: Vec<(i64, i64)> = vec![];
+        let extend = |a: i64, b: i64, span: &mut Vec<(i64, i64)>| span.push((a, b));
         let mut contributed = false;
         match kind {
             SampleKind::DailyTotal => {
@@ -526,46 +612,75 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &
                 }
             }
             SampleKind::CumulativeCounter => {
-                let resets_daily = g.iter().any(|m| matches!(m.detail, Some(Detail::Counter { resets_daily: true })));
+                let resets_daily = g.iter().any(|m| resets_daily(m));
                 let limit = max_per_minute(s.metric);
+                // A counter that resets at midnight starts from zero each day. Otherwise
+                // include the readings just before and after the day, so an increment
+                // spanning midnight is shared between the days instead of lost.
+                if !resets_daily {
+                    for c in context.iter().filter(|c| c.kind == SampleKind::CumulativeCounter && c.prov.source_name == source && c.prov.origin == origin && !self::resets_daily(c)) {
+                        if !g.iter().any(|m| m.id == c.id) {
+                            g.push(c);
+                        }
+                    }
+                    g.sort_by_key(|m| (m.start, m.prov.ingested_at));
+                }
                 let mut prev: Option<&Measurement> = None;
                 for m in &g {
                     let (a, inc) = match prev {
                         None => {
-                            if resets_daily {
+                            prev = Some(m);
+                            if resets_daily && m.start >= ds && m.start < de {
                                 (ds, m.value)
                             } else {
-                                prev = Some(m);
                                 continue;
                             }
                         }
                         Some(p) => {
                             let d = m.value - p.value;
-                            (p.start, if d < 0.0 { m.value } else { d })
+                            prev = Some(m);
+                            if d < 0.0 {
+                                // A reset: the new reading counts from zero. Devices reset at
+                                // midnight, so never spread it back into an earlier day.
+                                (p.start.max(time::day_start(time::local_day(m.start, m.utc_offset_min, &ctx.tz), &ctx.tz)), m.value)
+                            } else {
+                                (p.start, d)
+                            }
                         }
                     };
-                    let b = m.start;
-                    prev = Some(m);
+                    let b = m.start.max(a);
                     let mins = ((b - a) as f64 / MINUTE_MS as f64).max(1.0);
                     if inc / mins > limit {
                         rejected += 1;
                         continue;
                     }
-                    if covered.overlaps(a, b) {
+                    // The share of this increment inside the day, pro rata by time.
+                    let (ca, cb) = (a.max(ds), b.min(de));
+                    if cb <= ca {
+                        continue;
+                    }
+                    let free = covered.uncovered_len(ca, cb);
+                    if free <= 0 {
                         overlapped += 1;
                         continue;
                     }
-                    total += inc;
-                    incs.push(Increment { from: a, to: b, value: inc });
-                    extend(a, b, &mut span);
+                    // Only the part not already accounted for by a higher-ranked source counts.
+                    let share = inc * free as f64 / (b - a).max(1) as f64;
+                    total += share;
+                    incs.push(Increment { from: ca, to: cb, value: share });
+                    extend(ca, cb, &mut span);
                     contributed = true;
                 }
             }
             _ => continue,
         }
         if contributed {
-            let (a, b) = span.unwrap();
-            covered.add(a, b);
+            let a = span.iter().map(|u| u.0).min().unwrap();
+            let b = span.iter().map(|u| u.1).max().unwrap();
+            for (x, y) in &span {
+                covered.add(*x, *y);
+            }
+            all_intervals.extend(span.iter().copied());
             let what = match kind {
                 SampleKind::DailyTotal => "daily total",
                 SampleKind::Interval => "interval counts",
@@ -580,7 +695,7 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &
         s.method = "No usable records".into();
     } else {
         s.value = Some(parts.iter().map(|p| p.value).sum());
-        let covered_ms: i64 = parts.iter().map(|p| (p.to.min(de) - p.from.max(ds)).max(0)).sum();
+        let covered_ms = union_len(all_intervals, ds, de);
         s.coverage = Some((covered_ms as f64 / (de - ds) as f64).min(1.0));
         s.method = if parts.len() == 1 {
             format!("From {}", parts[0].label.to_lowercase())
@@ -594,6 +709,33 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], ctx: &
     }
     s.extra = Some(SummaryExtra::Additive { parts, overlapped, rejected_jumps: rejected, calorie_scope: None, active: None });
     incs
+}
+
+/// A measurement variant that must not be mixed with others.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Variant {
+    Hrv(HrvMethod),
+    Calories(CalorieScope),
+}
+
+impl Variant {
+    pub fn label(self) -> &'static str {
+        match self {
+            Variant::Hrv(m) => m.label(),
+            Variant::Calories(CalorieScope::Total) => "total calories",
+            Variant::Calories(CalorieScope::Active) => "active calories",
+            Variant::Calories(CalorieScope::Unspecified) => "calories of unspecified type",
+        }
+    }
+}
+
+/// The variant a day's summary was computed with, if the metric has variants.
+pub fn variant_of(s: &DaySummary) -> Option<Variant> {
+    match &s.extra {
+        Some(SummaryExtra::Hrv { method, .. }) => Some(Variant::Hrv(*method)),
+        Some(SummaryExtra::Additive { calorie_scope: Some(sc), .. }) => Some(Variant::Calories(*sc)),
+        _ => None,
+    }
 }
 
 /// In-memory index of summaries for quick lookups by the UI.
@@ -631,6 +773,45 @@ impl SummaryIndex {
     pub fn series(&self, metric: Metric, from: NaiveDate, to: NaiveDate) -> Vec<(NaiveDate, Option<f64>)> {
         time::days_inclusive(from, to).map(|d| (d, self.value(metric, d))).collect()
     }
+    /// Values for `[from, to]` restricted to one measurement variant — the HRV
+    /// method or calorie type used by most days — so incompatible values are
+    /// never averaged or compared. Returns the series, the variant, and how many
+    /// days were left out.
+    pub fn consistent_series(&self, metric: Metric, from: NaiveDate, to: NaiveDate) -> (Vec<(NaiveDate, Option<f64>)>, Option<Variant>, usize) {
+        let variant = self.majority_variant(metric, from, to);
+        let mut excluded = 0;
+        let v = time::days_inclusive(from, to)
+            .map(|d| {
+                let s = self.get(metric, d);
+                let val = s.and_then(|s| s.value);
+                match (variant, s.and_then(variant_of)) {
+                    (Some(want), Some(have)) if want != have && val.is_some() => {
+                        excluded += 1;
+                        (d, None)
+                    }
+                    _ => (d, val),
+                }
+            })
+            .collect();
+        (v, variant, excluded)
+    }
+
+    /// The HRV method or calorie type used by most days with data in `[from, to]`
+    /// (RMSSD and total calories win ties).
+    pub fn majority_variant(&self, metric: Metric, from: NaiveDate, to: NaiveDate) -> Option<Variant> {
+        let mut counts: Vec<(Variant, usize)> = vec![];
+        for d in time::days_inclusive(from, to) {
+            if let Some(v) = self.get(metric, d).filter(|s| s.value.is_some()).and_then(variant_of) {
+                match counts.iter_mut().find(|(k, _)| *k == v) {
+                    Some((_, n)) => *n += 1,
+                    None => counts.push((v, 1)),
+                }
+            }
+        }
+        let preferred = |v: &Variant| matches!(v, Variant::Hrv(HrvMethod::Rmssd) | Variant::Calories(CalorieScope::Total));
+        counts.into_iter().max_by(|a, b| a.1.cmp(&b.1).then(preferred(&a.0).cmp(&preferred(&b.0)))).map(|(v, _)| v)
+    }
+
     pub fn latest(&self, metric: Metric, on_or_before: NaiveDate) -> Option<&DaySummary> {
         self.map
             .range((metric, NaiveDate::MIN)..=(metric, on_or_before))
@@ -738,6 +919,22 @@ mod tests {
     }
 
     #[test]
+    fn reset_after_midnight_stays_in_its_own_day() {
+        // Lifetime counter on day 0, then a reboot reading the next morning:
+        // the reset value belongs to day 1 and is not spread back into day 0.
+        let h = 3_600_000;
+        let items = vec![
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 20 * h, None, 1000.0, Origin::BluetoothLive),
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 22 * h, None, 1600.0, Origin::BluetoothLive),
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 32 * h, None, 400.0, Origin::BluetoothLive),
+        ];
+        let s = summarize(&items, &ctx());
+        let total: f64 = s.iter().filter_map(|x| x.value).sum();
+        assert_eq!(s[0].value, Some(600.0));
+        assert_eq!(total, 1000.0);
+    }
+
+    #[test]
     fn implausible_counter_jump_rejected() {
         let mins = 60_000;
         let items = vec![
@@ -800,6 +997,90 @@ mod tests {
         let c = SummaryContext { tz, now: i64::MAX / 2, demo: false };
         let out = summarize(&[s], &c);
         assert_eq!(out[0].day, "2026-06-02");
+    }
+
+    #[test]
+    fn counter_increment_across_midnight_is_shared() {
+        let h = 3_600_000;
+        let items = vec![
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 22 * h, None, 1000.0, Origin::BluetoothLive),
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 23 * h, None, 1500.0, Origin::BluetoothLive),
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 25 * h, None, 2500.0, Origin::BluetoothLive),
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 26 * h, None, 2600.0, Origin::BluetoothLive),
+        ];
+        let s = summarize(&items, &ctx());
+        // 22–23: 500, 23–01 (1000) split evenly, 01–02: 100. Nothing lost, nothing doubled.
+        assert_eq!(s[0].value, Some(1000.0));
+        assert_eq!(s[1].value, Some(600.0));
+    }
+
+    #[test]
+    fn coverage_counts_intervals_not_spans() {
+        let h = 3_600_000;
+        let mut items = vec![
+            m(Metric::Steps, SampleKind::Interval, D0 + 8 * h, Some(D0 + 9 * h), 500.0, Origin::HistoryImport),
+            m(Metric::Steps, SampleKind::Interval, D0 + 20 * h, Some(D0 + 21 * h), 500.0, Origin::HistoryImport),
+        ];
+        for (i, v) in [(10, 0.0), (12, 1000.0), (14, 2000.0)] {
+            let mut c = m(Metric::Steps, SampleKind::CumulativeCounter, D0 + i * h, None, v, Origin::HistoryImport);
+            c.prov.source_name = "other".into();
+            c.id = measurement_id(&c);
+            items.push(c);
+        }
+        let s = summarize(&items, &ctx());
+        assert_eq!(s[0].value, Some(3000.0));
+        let cov = s[0].coverage.unwrap();
+        assert!((cov - 6.0 / 24.0).abs() < 1e-9, "{cov}");
+    }
+
+    #[test]
+    fn partially_overlapping_counter_increment_is_prorated() {
+        let h = 3_600_000;
+        let q = 15 * 60_000;
+        let items = vec![
+            m(Metric::Steps, SampleKind::Interval, D0 + 8 * h, Some(D0 + 17 * h), 9000.0, Origin::HistoryImport),
+            // live counter 16:45 → 17:15 (+600): half overlaps history
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 17 * h - q, None, 0.0, Origin::BluetoothLive),
+            m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 17 * h + q, None, 600.0, Origin::BluetoothLive),
+        ];
+        let s = summarize(&items, &ctx());
+        assert_eq!(s[0].value, Some(9300.0));
+    }
+
+    #[test]
+    fn overlapping_sleep_sessions_are_not_naps() {
+        let h = 3_600_000;
+        let mut a = m(Metric::Sleep, SampleKind::Session, D0 - 2 * h, Some(D0 + 6 * h), 420.0, Origin::HistoryImport);
+        a.detail = Some(Detail::Sleep(SleepDetail { stages: vec![], stages_measured: false, asleep_minutes_derived: false, is_main: true }));
+        let mut b = a.clone();
+        b.value = 400.0;
+        b.id = measurement_id(&b);
+        let mut nap = a.clone();
+        nap.start = D0 + 14 * h;
+        nap.end = Some(D0 + 15 * h);
+        nap.value = 50.0;
+        nap.id = measurement_id(&nap);
+        let s = summarize(&[a, b, nap], &ctx());
+        assert!(matches!(s[0].extra, Some(SummaryExtra::Sleep { naps: 1, .. })), "{:?}", s[0].extra);
+    }
+
+    #[test]
+    fn consistent_series_keeps_one_hrv_method() {
+        let d = 86_400_000;
+        let mk = |day: i64, v: f64, method: HrvMethod| {
+            let mut x = m(Metric::Hrv, SampleKind::Instant, D0 + day * d + 1000, None, v, Origin::HistoryImport);
+            x.detail = Some(Detail::Hrv { method });
+            x.id = measurement_id(&x);
+            x
+        };
+        let items = vec![mk(0, 40.0, HrvMethod::Rmssd), mk(0, 80.0, HrvMethod::Sdnn), mk(1, 90.0, HrvMethod::Sdnn), mk(2, 44.0, HrvMethod::Rmssd)];
+        let idx = SummaryIndex::from_vec(summarize(&items, &ctx()));
+        let d0 = time::local_day_in(D0, &parse_tz("UTC"));
+        let (series, variant, excluded) = idx.consistent_series(Metric::Hrv, d0, d0 + chrono::Duration::days(2));
+        assert_eq!(variant, Some(Variant::Hrv(HrvMethod::Rmssd)));
+        assert_eq!(excluded, 1);
+        let vals: Vec<f64> = series.into_iter().filter_map(|(_, v)| v).collect();
+        assert_eq!(vals, vec![40.0, 44.0]);
     }
 
     #[test]

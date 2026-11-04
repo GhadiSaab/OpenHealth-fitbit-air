@@ -59,8 +59,9 @@ No feature pretends to work: unavailable adapters say what is missing.
 
 ## Verification status
 
-* **Rust tests** (`cargo test -p airspace-core -p airspace-tauri`): 53 pass. They cover:
-  * aggregation, cumulative counters and resets, and overlap between imported history and live data;
+* **Rust tests** (`cargo test -p airspace-core -p airspace-tauri`): 61 pass. They cover:
+  * aggregation, cumulative counters and resets (including steps that span midnight), naps, coverage,
+    and overlap between imported history and live data;
   * daylight-saving days and overnight sleep;
   * import validation, duplicates and conflicts;
   * backup secrecy and CSV export;

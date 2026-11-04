@@ -173,12 +173,18 @@ pub fn days_inclusive(from: NaiveDate, to: NaiveDate) -> impl Iterator<Item = Na
 }
 
 /// Formats a duration in minutes as "7 h 32 min".
+/// Non-breaking space: keeps a number and its unit on one line.
+pub const NBSP: char = '\u{a0}';
+
+/// "7 h 5 min" (non-breaking, so it never wraps mid-value).
 pub fn fmt_minutes(min: f64) -> String {
     let m = min.round() as i64;
     if m < 60 {
-        format!("{m} min")
+        format!("{m}\u{a0}min")
+    } else if m % 60 == 0 {
+        format!("{}\u{a0}h", m / 60)
     } else {
-        format!("{} h {:02} min", m / 60, m % 60)
+        format!("{}\u{a0}h\u{a0}{}\u{a0}min", m / 60, m % 60)
     }
 }
 
@@ -187,11 +193,11 @@ pub fn fmt_ago(ts: i64, now: i64) -> String {
     let d = (now - ts).max(0) / MINUTE_MS;
     match d {
         0 => "just now".into(),
-        1..=59 => format!("{d} min ago"),
+        1..=59 => format!("{d}\u{a0}min ago"),
         60..=1439 => {
             let h = d / 60;
             let m = d % 60;
-            if m == 0 { format!("{h} h ago") } else { format!("{h} h {m} min ago") }
+            if m == 0 { format!("{h}\u{a0}h ago") } else { format!("{h}\u{a0}h\u{a0}{m}\u{a0}min ago") }
         }
         _ => {
             let days = d / 1440;

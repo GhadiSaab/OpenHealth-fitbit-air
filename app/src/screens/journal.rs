@@ -53,7 +53,10 @@ fn Calendar() -> impl IntoView {
                     let first = time::week_start(m);
                     let today = app.today();
                     let goal = app.settings.with(|s| s.step_goal as f64);
-                    let weeks = (0..6).map(|w| first + Duration::days(7 * w)).filter(|w| w.month() == m.month() || (*w + Duration::days(6)).month() == m.month()).collect::<Vec<_>>();
+                    let weeks = (0..6).map(|w| first + Duration::days(7 * w)).filter(|w| w.month() == m.month() || (*w + Duration::days(6)).month() == m.month())
+                        // Weeks that haven't started yet only push the editor down.
+                        .filter(|w| *w <= today)
+                        .collect::<Vec<_>>();
                     weeks.into_iter().map(|w| view! {
                         <div class="cal-row">
                             {(0..7).map(|i| {
@@ -108,6 +111,8 @@ fn DayEditor() -> impl IntoView {
     let dirty = RwSignal::new(false);
     let saving = RwSignal::new(false);
     let custom = RwSignal::new(String::new());
+    // The entry as it was before "Clear entry", so it can be restored.
+    let cleared = RwSignal::new(None::<JournalEntry>);
     Effect::new(move |_| {
         let d = app.day.get();
         // Changing day with unsaved edits saves them rather than dropping them.
@@ -123,6 +128,7 @@ fn DayEditor() -> impl IntoView {
         let e = app.journal.with_untracked(|j| j.iter().find(|e| e.day == time::day_key(d)).cloned()).unwrap_or_else(|| JournalEntry::new(d, platform::now_ms()));
         draft.set(e);
         dirty.set(false);
+        cleared.set(None);
         app.journal_draft.set(None);
     });
     let all_tags = move || {
@@ -223,8 +229,11 @@ fn DayEditor() -> impl IntoView {
                 <button class="btn primary" disabled=move || !dirty.get() || saving.get() on:click=move |_| save()>
                     {move || if saving.get() { "Saving…" } else if dirty.get() { "Save entry" } else { "Saved" }}
                 </button>
-                {move || draft.with(|d| !d.is_empty()).then(|| view! {
-                    <button class="btn quiet" on:click=move |_| { draft.update(|d| { d.note.clear(); d.tags.clear(); }); dirty.set(true); save(); }>"Clear entry"</button>
+                {move || cleared.get().map(|prev| view! {
+                    <button class="btn quiet" on:click=move |_| { draft.set(prev.clone()); dirty.set(true); cleared.set(None); save(); }>"Undo clear"</button>
+                })}
+                {move || (draft.with(|d| !d.is_empty()) && cleared.get().is_none()).then(|| view! {
+                    <button class="btn quiet" on:click=move |_| { cleared.set(Some(draft.get_untracked())); draft.update(|d| { d.note.clear(); d.tags.clear(); }); dirty.set(true); save(); }>"Clear entry"</button>
                 })}
             </div>
             <p class="fineprint">"Notes stay on this device. They're only shared with an AI provider if you explicitly include them."</p>

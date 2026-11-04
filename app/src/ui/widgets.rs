@@ -149,6 +149,7 @@ pub fn SheetFrame(#[prop(into)] title: String, on_close: Callback<()>, children:
         <div class="sheet-backdrop" on:click=move |_| on_close.run(())></div>
         <div class="sheet" role="dialog" aria-modal="true" aria-labelledby=id
             on:keydown=move |ev: leptos::ev::KeyboardEvent| { if ev.key() == "Escape" { on_close.run(()) } }>
+            <div class="sheet-grabber" aria-hidden="true"></div>
             <div class="sheet-head">
                 <h2 id=id>{title}</h2>
                 <button id="sheet-close" class="icon-btn" aria-label="Close" on:click=move |_| on_close.run(())><Icon name="close" /></button>
@@ -168,6 +169,15 @@ fn origin_label(o: Origin) -> &'static str {
 
 thread_local! {
     static SHEET_OPENER: std::cell::RefCell<Option<web_sys::HtmlElement>> = const { std::cell::RefCell::new(None) };
+    static SHEET_PUSHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub fn sheet_history_pushed() -> bool {
+    SHEET_PUSHED.with(|p| p.get())
+}
+
+pub fn sheet_history_popped() {
+    SHEET_PUSHED.with(|p| p.set(false));
 }
 
 /// Makes everything behind an open sheet inert (unfocusable and hidden from
@@ -180,12 +190,28 @@ fn set_background_inert(on: bool) {
             if on { let _ = el.set_attribute("inert", ""); } else { let _ = el.remove_attribute("inert"); }
         }
     }
+    crate::platform::set_root_attr("data-sheet", if on { "open" } else { "closed" });
+    let history = crate::platform::window().history().ok();
     if on {
         let opener = doc.active_element().and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
         SHEET_OPENER.with(|o| *o.borrow_mut() = opener);
-    } else if let Some(el) = SHEET_OPENER.with(|o| o.borrow_mut().take()) {
-        if el.is_connected() {
-            let _ = el.focus();
+        // A history entry so the Android/browser Back button closes the sheet.
+        if let Some(h) = &history {
+            if h.push_state(&wasm_bindgen::JsValue::from_str("sheet"), "").is_ok() {
+                SHEET_PUSHED.with(|p| p.set(true));
+            }
+        }
+    } else {
+        // Closed by a button: drop the entry we pushed (Back already did otherwise).
+        if SHEET_PUSHED.with(|p| p.replace(false)) {
+            if let Some(h) = &history {
+                let _ = h.back();
+            }
+        }
+        if let Some(el) = SHEET_OPENER.with(|o| o.borrow_mut().take()) {
+            if el.is_connected() {
+                let _ = el.focus();
+            }
         }
     }
 }
@@ -219,7 +245,7 @@ pub fn SheetHost() -> impl IntoView {
                                     <dd class="tabular">{s.value.map(|v| airspace_core::settings::display(metric, v, &settings).joined()).unwrap_or_else(|| "No usable value".into())}</dd>
                                     <dt>"How it was produced"</dt><dd>{s.method.clone()}</dd>
                                     <dt>"Source"</dt><dd>{s.origins.iter().map(|o| origin_label(*o)).collect::<Vec<_>>().join(" + ")}{if s.demo { " (simulated demo data)" } else { "" }}</dd>
-                                    <dt>"Records"</dt><dd class="tabular">{s.count.to_string()}</dd>
+                                    <dt>"Records"</dt><dd class="tabular">{crate::ui::format::count(s.count as usize)}</dd>
                                     {s.coverage.map(|c| view! { <dt>"Completeness"</dt><dd class="tabular">{format!("{:.0}% of the day has data", c * 100.0)}</dd> })}
                                     {s.latest_ts.map(|t| view! { <dt>"Latest measurement"</dt><dd class="tabular">{time::format_ts(t, &tz, "%a %-d %b, %H:%M")}</dd> })}
                                     {s.provisional.then(|| view! { <dt>"Field mapping"</dt><dd>"Provisional: some values come from a live Bluetooth mapping that has not been validated yet."</dd> })}
@@ -335,11 +361,20 @@ pub fn BusyOverlay() -> impl IntoView {
 #[component]
 pub fn DemoBanner() -> impl IntoView {
     let app = use_app();
-    move || (app.db.get() == DbKind::Demo).then(|| view! {
-        <div class="demo-banner" role="note">
-            <span><strong>"Demo data."</strong>" Everything here is simulated and kept apart from your own records."</span>
-            <button class="link" on:click=move |_| app.go(Route::Data)>"Manage"</button>
-        </div>
+    move || (app.db.get() == DbKind::Demo).then(|| if app.route.get() == Route::Today {
+        view! {
+            <div class="demo-banner" role="note">
+                <span><strong>"Demo data."</strong>" Everything here is simulated and kept apart from your own records."</span>
+                <button class="link" on:click=move |_| app.go(Route::Data)>"Manage"</button>
+            </div>
+        }.into_any()
+    } else {
+        view! {
+            <div class="demo-banner compact" role="note">
+                <span><strong>"Demo data"</strong>" · simulated"</span>
+                <button class="link" on:click=move |_| app.go(Route::Data)>"Manage"</button>
+            </div>
+        }.into_any()
     })
 }
 
@@ -359,7 +394,8 @@ pub fn Section(#[prop(into)] title: String, #[prop(optional, into)] action: Opti
 
 /// Width available for charts, so SVG text stays at its intended size.
 pub fn chart_width(vw: f64) -> f64 {
-    let content = if vw >= 900.0 { (vw - 260.0).min(860.0) } else { vw };
+    let rail = vw >= 900.0 || crate::platform::media_matches("(min-width: 700px) and (orientation: landscape) and (max-height: 520px)");
+    let content = if rail { (vw - 260.0).min(860.0) } else { vw };
     (content - 64.0).clamp(260.0, 760.0)
 }
 
@@ -387,17 +423,25 @@ fn RecordList(metric: airspace_core::Metric, day: chrono::NaiveDate) -> impl Int
     let app = use_app();
     let shown = RwSignal::new(false);
     let rows = RwSignal::new(None::<Vec<airspace_core::Measurement>>);
-    let load = move || {
-        shown.set(true);
-        leptos::task::spawn_local(async move {
-            let mut v = crate::state::load_range_all(app, metric, day, day).await;
-            v.sort_by_key(|m| m.start);
-            rows.set(Some(v));
-        });
+    // One day's records are small: load them up front so the button can say
+    // how many there are, including replaced originals kept for the record.
+    leptos::task::spawn_local(async move {
+        let mut v = crate::state::load_range_all(app, metric, day, day).await;
+        v.sort_by_key(|m| m.start);
+        let _ = rows.try_set(Some(v));
+    });
+    let label = move || match rows.get() {
+        None => "Show individual records".to_string(),
+        Some(v) => {
+            let replaced = v.iter().filter(|m| m.superseded_by.is_some()).count();
+            let n = crate::ui::format::count(v.len());
+            let noun = if v.len() == 1 { "record" } else { "records" };
+            if replaced > 0 { format!("Show {n} individual {noun} ({replaced} replaced, kept)") } else { format!("Show {n} individual {noun}") }
+        }
     };
     view! {
         {move || if !shown.get() {
-            view! { <button class="link" on:click=move |_| load()>"Show individual records"</button> }.into_any()
+            view! { <button class="link" on:click=move |_| shown.set(true)>{label}</button> }.into_any()
         } else {
             match rows.get() {
                 None => view! { <p class="muted" aria-busy="true">"Loading…"</p> }.into_any(),
@@ -416,6 +460,11 @@ fn RecordList(metric: airspace_core::Metric, day: chrono::NaiveDate) -> impl Int
                         let value = if m.metric == airspace_core::Metric::Sleep { time::fmt_minutes(m.value) } else { airspace_core::settings::display(m.metric, m.value, &s).joined() };
                         let kind = format!("{} · {} · {}", kind_label(m.kind), origin_label(m.prov.origin), format!("{:?}", m.prov.status).to_lowercase());
                         let mut details = vec![offset_label(m.utc_offset_min), m.prov.source_name.clone()];
+                        match &m.detail {
+                            Some(airspace_core::Detail::Hrv { method }) => details.insert(0, format!("method {}", method.label())),
+                            Some(airspace_core::Detail::Calories { scope }) => details.insert(0, format!("{} calories", format!("{scope:?}").to_lowercase())),
+                            _ => {}
+                        }
                         if let Some(d) = &m.prov.device { details.push(d.clone()); }
                         if let Some(id) = &m.prov.original_id { details.push(format!("source id {id}")); }
                         if let Some(b) = &m.prov.batch_id { details.push(format!("batch {b}")); }

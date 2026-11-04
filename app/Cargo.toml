@@ -25,7 +25,7 @@ console_error_panic_hook = "0.1.7"
 [dependencies.web-sys]
 version = "0.3.107"
 features = [
-  "Window", "Document", "Element", "HtmlElement", "HtmlDocument", "Node", "Storage", "Location", "History",
+  "Window", "Document", "Element", "HtmlElement", "HtmlDocument", "Node", "Storage", "Location", "History", "VisualViewport", "ScrollIntoViewOptions", "ScrollLogicalPosition",
   "HtmlInputElement", "HtmlTextAreaElement", "HtmlSelectElement", "HtmlAnchorElement", "HtmlDialogElement",
   "File", "FileList", "Blob", "BlobPropertyBag", "Url",
   "MediaQueryList", "Navigator", "Performance",

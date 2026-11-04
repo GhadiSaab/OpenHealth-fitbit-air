@@ -47,7 +47,7 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
 
   // Empty database path first: "Set up my device later" → empty Today.
   await page.getByRole('button', { name: /Set up my device later/ }).click();
-  await page.getByText('No data yet').waitFor();
+  await page.getByRole('heading', { name: 'No data yet' }).waitFor();
   check(true, 'empty database shows a friendly empty state');
   await shot('02-empty-today');
 
@@ -191,8 +191,8 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   await page.getByRole('heading', { name: 'Preview' }).waitFor({ timeout: 20000 });
   check(await page.getByText(/2 rejected/).count() > 0, 'preview reports rejected records (implausible HR, absolute temperature)');
   await shot('12-import-preview');
-  await page.getByRole('button', { name: /^Import \d+ records/ }).click();
-  await page.getByText(/Imported \d+ records/).waitFor({ timeout: 30000 });
+  await page.getByRole('button', { name: /^Import\s\d+\srecords/ }).click();
+  await page.getByText(/Imported\s\d+\srecords/).waitFor({ timeout: 30000 });
   check(await page.getByText(/Demo data\./).count() === 0, 'personal data shows no demo banner');
   // Re-importing the same file finds only duplicates.
   await page.goto(base + '#/profile/data/import');

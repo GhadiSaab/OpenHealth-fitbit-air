@@ -5,7 +5,7 @@ use crate::ui::charts::{BarChart, DataTable, IBucket, IntradayChart, LineChart, 
 use crate::ui::format::{self, day_short};
 use crate::ui::icons::{Icon, metric_icon};
 use crate::ui::widgets::{DemoBanner, EmptyState, Header, Section, Segmented, chart_width, use_app};
-use airspace_core::aggregate::{SummaryContext, SummaryExtra, additive_increments};
+use airspace_core::aggregate::{SummaryContext, SummaryExtra, Variant, additive_increments, variant_of};
 use airspace_core::catalog::{self, DailyChart, Group};
 use airspace_core::insights::{circular_mean_minutes, fmt_clock, wrap_diff};
 use airspace_core::series::{self, Point, std_dev};
@@ -24,7 +24,15 @@ pub fn Explore() -> impl IntoView {
         <Header title="Explore" />
         <DemoBanner />
         <p class="lede">"Every metric Airspace can store. Tap one for its history, statistics and where the data came from."</p>
-        <ul class="group-list">
+        {move || app.summaries.with(|i| i.is_empty()).then(|| view! {
+            <EmptyState icon="explore" title="Nothing to explore yet" body="Import your history to see every metric here, or try the demo to see how it works.">
+                <div class="btn-row">
+                    <button class="btn primary" on:click=move |_| app.go(Route::Import)>"Import history"</button>
+                    <button class="btn" on:click=move |_| { leptos::task::spawn_local(async move { if let Err(e) = app.open_demo().await { app.error(e) } }); }>"Explore demo"</button>
+                </div>
+            </EmptyState>
+        })}
+        <ul class="group-list" class:hidden=move || app.summaries.with(|i| i.is_empty())>
             {Group::ALL.into_iter().map(|g| view! {
                 <li class="group-card">
                     {(g.metrics().len() > 1).then(|| view! { <h2 class="group-title">{g.title()}</h2> })}
@@ -45,7 +53,7 @@ pub fn Explore() -> impl IntoView {
                                         let series: Vec<Option<f64>> = i.series(m, today - Duration::days(13), today).into_iter().map(|(_, v)| v).collect();
                                         match latest {
                                             Some(sm) => view! {
-                                                <span class="metric-value tabular">{format::value(m, sm.value.unwrap_or(0.0), &s)}</span>
+                                                <span class="metric-value tabular">{if sm.provisional { "≈\u{a0}" } else { "" }}{format::value(m, sm.value.unwrap_or(0.0), &s)}</span>
                                                 <span class="metric-when">{time::parse_day(&sm.day).map(|d| if d == today { "Today".into() } else { day_short(d) }).unwrap_or_default()}</span>
                                                 <Sparkline values=series tone=info.tone.css() width=72.0 height=28.0 />
                                             }.into_any(),
@@ -63,43 +71,44 @@ pub fn Explore() -> impl IntoView {
     }
 }
 
-/// The period shown for a range and anchor day.
+/// The period shown for a range, ending on the selected day: the last 7 or
+/// 30 days, or the last 52 weeks. Trailing windows keep charts full of
+/// recorded days instead of mostly-empty future.
 fn period(range: Range, anchor: NaiveDate) -> (NaiveDate, NaiveDate) {
     match range {
         Range::Day => (anchor, anchor),
-        Range::Week => {
-            let s = time::week_start(anchor);
-            (s, s + Duration::days(6))
-        }
-        Range::Month => {
-            let s = time::month_start(anchor);
-            (s, time::add_months(s, 1) - Duration::days(1))
-        }
-        Range::Year => (NaiveDate::from_ymd_opt(anchor.year(), 1, 1).unwrap(), NaiveDate::from_ymd_opt(anchor.year(), 12, 31).unwrap()),
+        Range::Week => (anchor - Duration::days(6), anchor),
+        Range::Month => (anchor - Duration::days(29), anchor),
+        Range::Year => (time::week_start(anchor) - Duration::weeks(51), anchor),
     }
 }
 
 fn shift(range: Range, anchor: NaiveDate, dir: i32) -> NaiveDate {
-    match range {
-        Range::Day => anchor + Duration::days(dir as i64),
-        Range::Week => anchor + Duration::days(7 * dir as i64),
-        Range::Month => time::add_months(anchor, dir),
-        Range::Year => time::add_months(anchor, 12 * dir),
-    }
+    let days = match range {
+        Range::Day => 1,
+        Range::Week => 7,
+        Range::Month => 30,
+        Range::Year => 364,
+    };
+    anchor + Duration::days(days * dir as i64)
 }
 
 fn period_label(range: Range, from: NaiveDate, to: NaiveDate) -> String {
     match range {
         Range::Day => from.format("%A, %-d %B %Y").to_string(),
-        Range::Week => {
-            if from.month() == to.month() {
-                format!("{}–{} {}", from.day(), to.day(), to.format("%B %Y"))
-            } else {
-                format!("{} – {}", from.format("%-d %b"), to.format("%-d %b %Y"))
-            }
-        }
-        Range::Month => from.format("%B %Y").to_string(),
-        Range::Year => from.format("%Y").to_string(),
+        _ if from.year() == to.year() && from.month() == to.month() => format!("{}–{} {}", from.day(), to.day(), to.format("%B %Y")),
+        _ if from.year() == to.year() => format!("{} – {}", from.format("%-d %b"), to.format("%-d %b %Y")),
+        _ => format!("{} – {}", from.format("%-d %b %Y"), to.format("%-d %b %Y")),
+    }
+}
+
+/// "the previous 7 days" etc.
+fn previous_label(range: Range) -> &'static str {
+    match range {
+        Range::Day => "the previous day",
+        Range::Week => "the previous 7 days",
+        Range::Month => "the previous 30 days",
+        Range::Year => "the previous 52 weeks",
     }
 }
 
@@ -181,10 +190,13 @@ fn pts_for_days(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Ve
     let s = app.settings.get();
     let today = app.today();
     app.summaries.with(|i| {
+        // Only one HRV method / calorie type is plotted in a period.
+        let variant = if metric == Metric::Hrv { i.majority_variant(metric, from, to) } else { None };
         time::days_inclusive(from, to)
             .map(|d| {
                 let sm = i.get(metric, d);
-                let v = sm.and_then(|x| x.value);
+                let other = matches!((variant, sm.and_then(variant_of)), (Some(want), Some(have)) if want != have);
+                let v = if other { None } else { sm.and_then(|x| x.value) };
                 let (lo, hi) = match catalog::info(metric).daily_chart {
                     DailyChart::RangeLine => (sm.and_then(|x| x.min).map(|v| display_scale(metric, v, &s)), sm.and_then(|x| x.max).map(|v| display_scale(metric, v, &s))),
                     _ => (None, None),
@@ -198,6 +210,9 @@ fn pts_for_days(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Ve
                 }
                 if d == today && partial_today(metric) && v.is_some() {
                     note.push("today so far — not a complete day".into());
+                }
+                if other {
+                    note.push(format!("measured with {} — not comparable, not plotted", sm.and_then(variant_of).map(|x| x.label()).unwrap_or("another method")));
                 }
                 if metric == Metric::Calories {
                     if let Some(CalorieScope::Unspecified) = sm.and_then(calorie_scope) {
@@ -213,6 +228,7 @@ fn pts_for_days(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Ve
                 };
                 Pt {
                     future: d > today,
+                    partial: d == today && partial_today(metric),
                     label: d.format("%a %-d %b %Y").to_string(),
                     tick: if (to - from).num_days() > 10 { d.day().to_string() } else { d.format("%a").to_string() },
                     v: v.map(|v| display_scale(metric, v, &s)),
@@ -231,12 +247,21 @@ fn pts_for_year(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Ve
     let s = app.settings.get();
     let mut out = vec![];
     let mut w = time::week_start(from);
+    let today = app.today();
     app.summaries.with(|i| {
+        let variant = i.majority_variant(metric, from, to);
         while w <= to {
             let we = w + Duration::days(6);
-            let vals: Vec<f64> = i.series(metric, w, we).into_iter().filter_map(|(_, v)| v).collect();
+            // Complete days only, and one HRV method / calorie type.
+            let vals: Vec<f64> = time::days_inclusive(w, we)
+                .filter(|d| !(*d == today && partial_today(metric)))
+                .filter_map(|d| i.get(metric, d))
+                .filter(|sm| variant.is_none() || variant_of(sm) == variant)
+                .filter_map(|sm| sm.value)
+                .collect();
             let mean = if vals.is_empty() { None } else { Some(vals.iter().sum::<f64>() / vals.len() as f64) };
             out.push(Pt {
+                partial: false,
                 future: w > app.today(),
                 label: format!("Week of {}", w.format("%-d %b %Y")),
                 tick: if w.day() <= 7 { w.format("%b").to_string() } else { String::new() },
@@ -293,12 +318,12 @@ fn PeriodView(metric: Metric, range: Range, from: NaiveDate, to: NaiveDate, show
             let tr = trend();
             match info.daily_chart {
                 DailyChart::Bars => view! { <BarChart pts=p tone=tone title=t goal=goal() width=width() trend=tr /> }.into_any(),
-                DailyChart::Line | DailyChart::RangeLine => view! { <LineChart pts=p tone=tone title=t width=width() trend=tr /> }.into_any(),
+                DailyChart::Line | DailyChart::RangeLine => view! { <LineChart pts=p tone=tone title=t width=width() trend=tr cap=(metric == Metric::Spo2).then_some(100.0) /> }.into_any(),
                 DailyChart::Deviation => view! { <LineChart pts=p tone=tone title=t width=width() deviation=true trend=tr /> }.into_any(),
             }
         }}
         <div class="chart-foot">
-            <span class="muted">{move || format!("Values in {}. Dots on the baseline mark days with no data.", display_unit(metric, &app.settings.get()))}
+            <span class="muted">{move || format!("Values in {}. Rings under the axis mark days with no data; lighter bars are today so far.", display_unit(metric, &app.settings.get()))}
                 {(range == Range::Month).then(|| view! { " " <span class="legend-trend">"7-day average"</span> })}
             </span>
             <button class="link" aria-expanded=move || if show_table.get() { "true" } else { "false" } on:click=move |_| show_table.update(|v| *v = !*v)>
@@ -329,7 +354,9 @@ fn DayView(metric: Metric, day: NaiveDate) -> impl IntoView {
     let samples = async_signal(
         move || (app.db.get(), app.data_rev.get()),
         move |_| {
-            let (a, b) = if metric == Metric::Sleep { (day, day) } else { (day, day) };
+            // Additive metrics load the neighbouring days too, so a running counter
+            // reading from just before midnight can be used for the first increment.
+            let (a, b) = if metric.is_additive() { (day - Duration::days(1), day + Duration::days(1)) } else { (day, day) };
             load_range(app, metric, a, b)
         },
     );
@@ -338,7 +365,7 @@ fn DayView(metric: Metric, day: NaiveDate) -> impl IntoView {
     view! {
         {move || match samples.get() {
             None => view! { <div class="chart-skeleton" aria-busy="true"></div> }.into_any(),
-            Some(ms) if ms.is_empty() => view! {
+            Some(ms) if !ms.iter().any(|m| airspace_core::aggregate::day_of(m, &app.tz_untracked()) == day) => view! {
                 <div class="chart-empty"><p><strong>{format!("No {} recorded on {}.", catalog::info(metric).short.to_lowercase(), day_short(day))}</strong></p>
                 <p class="muted">"The tracker may not have been worn, or this day hasn't been imported."</p></div>
             }.into_any(),
@@ -354,10 +381,20 @@ fn DayView(metric: Metric, day: NaiveDate) -> impl IntoView {
     }
 }
 
+/// Labels at local wall-clock 00:00, 06:00, 12:00, 18:00 and the next 00:00,
+/// placed at their real instants (correct on 23- and 25-hour DST days).
 fn hour_labels(app: &App, day: NaiveDate) -> Vec<(i64, String)> {
+    use chrono::TimeZone;
     let tz = app.tz_untracked();
-    let (s, _) = time::day_bounds(day, &tz);
-    (0..=4).map(|i| (s + i * 6 * HOUR_MS, format!("{:02}:00", (i * 6) % 24))).collect()
+    let mut out: Vec<(i64, String)> = [0u32, 6, 12, 18]
+        .iter()
+        .filter_map(|h| {
+            let t = tz.from_local_datetime(&day.and_hms_opt(*h, 0, 0)?).earliest()?;
+            Some((t.timestamp_millis(), format!("{h:02}:00")))
+        })
+        .collect();
+    out.push((time::day_bounds(day, &tz).1, "00:00".into()));
+    out
 }
 
 fn table_toggle(show: RwSignal<bool>) -> impl IntoView {
@@ -451,14 +488,35 @@ fn additive_day(app: &App, metric: Metric, ms: &Arc<Vec<Measurement>>, day: Naiv
     let counters = ms.iter().any(|m| m.kind == airspace_core::SampleKind::CumulativeCounter);
     let rows: Vec<Vec<String>> = buckets.iter().map(|b| vec![b.label.clone(), b.text.clone()]).collect();
     let title = format!("{} per hour on {}", catalog::info(metric).title, day_short(day));
+    // Time with no records at all (e.g. charging, disconnected) is a gap, not zero.
+    let end = to.min(app.now.get_untracked());
+    let mut covered: Vec<(i64, i64)> = incs.iter().map(|i| (i.from, i.to)).collect();
+    covered.sort_unstable();
+    let mut gaps = vec![];
+    let mut cursor = from;
+    for (a, b) in covered {
+        if a - cursor >= 30 * MINUTE_MS && a <= end {
+            gaps.push((cursor, a.min(end)));
+        }
+        cursor = cursor.max(b);
+    }
+    if !daily_only && end - cursor >= 30 * MINUTE_MS {
+        gaps.push((cursor, end));
+    }
+    if daily_only {
+        gaps.clear();
+    }
+    let gap_labels: Vec<String> = gaps.iter().map(|(a, b)| format!("{}–{}", time::format_ts(*a, &tz, "%H:%M"), time::format_ts(*b, &tz, "%H:%M"))).collect();
+    let gap_total: i64 = gaps.iter().map(|(a, b)| b - a).sum();
     view! {
         {if buckets.is_empty() {
             view! { <div class="chart-empty"><p>{if daily_only { "Only a daily total is available for this day; there is no hourly breakdown." } else { "No hourly data." }}</p></div> }.into_any()
         } else {
-            view! { <IntradayChart buckets=buckets from=from to=to gaps=vec![] tone="activity" title=title hour_labels=hour_labels(app, day) bars=true width=width /> }.into_any()
+            view! { <IntradayChart buckets=buckets from=from to=to gaps=gaps.clone() gap_labels=gap_labels.clone() tone="activity" title=title hour_labels=hour_labels(app, day) bars=true width=width /> }.into_any()
         }}
         <p class="chart-note muted">
-            {"Hourly totals use the same source rules as the daily total, so they add up to it. "}
+            {(!daily_only).then_some("Hourly totals use the same source rules as the daily total, so they add up to it. ")}
+            {(!gaps.is_empty()).then(|| format!("No records for {} ({}); shaded, not counted as zero. ", time::fmt_minutes((gap_total / MINUTE_MS) as f64), gap_labels.join(", ")))}
             {counters.then_some("Live values come from the device's running counter; Airspace counts the change between readings, never the readings themselves.")}
         </p>
         {table_toggle(show)}
@@ -500,16 +558,16 @@ fn sleep_day(app: &App, ms: &Arc<Vec<Measurement>>, width: f64, show: RwSignal<b
     }
     let tz2 = tz;
     let describe: Arc<dyn Fn(&StageSeg) -> String + Send + Sync> = Arc::new(move |s: &StageSeg| {
-        format!("{} · {}–{}", time::fmt_minutes(((s.end - s.start) / MINUTE_MS) as f64), time::format_ts(s.start, &tz2, "%H:%M"), time::format_ts(s.end, &tz2, "%H:%M"))
+        format!("{} · {}–{}", time::fmt_minutes((s.end - s.start) as f64 / MINUTE_MS as f64), time::format_ts(s.start, &tz2, "%H:%M"), time::format_ts(s.end, &tz2, "%H:%M"))
     });
     let staged = !segs.is_empty();
     let rows: Vec<Vec<String>> = segs
         .iter()
-        .map(|s| vec![format!("{}–{}", time::format_ts(s.start, &tz, "%H:%M"), time::format_ts(s.end, &tz, "%H:%M")), STAGE_ROWS.iter().find(|r| r.0 == s.stage).map(|r| r.1).unwrap_or("").into(), time::fmt_minutes(((s.end - s.start) / MINUTE_MS) as f64)])
+        .map(|s| vec![format!("{}–{}", time::format_ts(s.start, &tz, "%H:%M"), time::format_ts(s.end, &tz, "%H:%M")), STAGE_ROWS.iter().find(|r| r.0 == s.stage).map(|r| r.1).unwrap_or("").into(), time::fmt_minutes((s.end - s.start) as f64 / MINUTE_MS as f64)])
         .collect();
     let mut totals: BTreeMap<&'static str, f64> = BTreeMap::new();
     for s in &segs {
-        *totals.entry(s.stage).or_default() += ((s.end - s.start) / MINUTE_MS) as f64;
+        *totals.entry(s.stage).or_default() += (s.end - s.start) as f64 / MINUTE_MS as f64;
     }
     let sleep_summary = format!(
         "Sleep stages from {} to {}, {} asleep: {}",
@@ -557,7 +615,7 @@ fn calorie_scope(sm: &airspace_core::aggregate::DaySummary) -> Option<CalorieSco
 /// Daily values for statistics: excludes future days, today's incomplete
 /// value for growing metrics, and (for calories) days whose energy type
 /// differs from `scope`. Returns (values, mins, maxes, excluded_today, excluded_scope).
-fn stat_values(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate, scope: Option<CalorieScope>) -> (Vec<f64>, Vec<f64>, Vec<f64>, bool, usize) {
+fn stat_values(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate, scope: Option<Variant>) -> (Vec<f64>, Vec<f64>, Vec<f64>, bool, usize) {
     let today = app.today();
     let (mut v, mut lo, mut hi, mut ex_today, mut ex_scope) = (vec![], vec![], vec![], false, 0);
     app.summaries.with(|i| {
@@ -568,7 +626,7 @@ fn stat_values(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate, scope:
                 ex_today = true;
                 continue;
             }
-            if metric == Metric::Calories && scope.is_some() && calorie_scope(sm) != scope {
+            if scope.is_some() && variant_of(sm) != scope {
                 ex_scope += 1;
                 continue;
             }
@@ -580,20 +638,9 @@ fn stat_values(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate, scope:
     (v, lo, hi, ex_today, ex_scope)
 }
 
-/// The calorie type used by most days in a period.
-fn majority_scope(app: &App, from: NaiveDate, to: NaiveDate) -> Option<CalorieScope> {
-    let mut counts: Vec<(CalorieScope, usize)> = vec![];
-    app.summaries.with(|i| {
-        for d in time::days_inclusive(from, to) {
-            if let Some(sc) = i.get(Metric::Calories, d).and_then(calorie_scope) {
-                match counts.iter_mut().find(|(k, _)| *k == sc) {
-                    Some((_, n)) => *n += 1,
-                    None => counts.push((sc, 1)),
-                }
-            }
-        }
-    });
-    counts.into_iter().max_by_key(|(_, n)| *n).map(|(k, _)| k)
+/// The HRV method / calorie type used by most days in a period.
+fn majority_variant(app: &App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Option<Variant> {
+    app.summaries.with(|i| i.majority_variant(metric, from, to))
 }
 
 #[component]
@@ -611,7 +658,8 @@ fn PeriodStats(metric: Metric, range: Range) -> impl IntoView {
         let (from, to) = period(range, anchor);
         let len = (to - from).num_days() + 1;
         let (pfrom, pto) = (from - Duration::days(len), from - Duration::days(1));
-        let scope = if metric == Metric::Calories { majority_scope(&app, from, to) } else { None };
+        // One variant for both periods, so the comparison is like for like.
+        let scope = majority_variant(&app, metric, pfrom, to);
         let (cur, lows, highs, ex_today, ex_scope) = stat_values(&app, metric, from, to, scope);
         let (prev, _, _, _, _) = stat_values(&app, metric, pfrom, pto, scope);
         let complete_days = ((to.min(today) - from).num_days() + 1 - if ex_today { 1 } else { 0 }).max(0);
@@ -619,10 +667,11 @@ fn PeriodStats(metric: Metric, range: Range) -> impl IntoView {
         let pst = series::stats(prev.iter().copied());
         let avg_label = if metric.is_additive() || metric == Metric::Sleep { "Daily average" } else { "Average" };
         let reliable = (st.n as i64) * 2 >= complete_days.max(1) && (pst.n as i64) * 2 >= len && st.n > 0;
-        let label = match range { Range::Day => "previous day", Range::Week => "previous week", Range::Month => "previous month", Range::Year => "previous year" };
+        let label = previous_label(range);
+        let per_day = if metric.is_additive() || metric == Metric::Sleep { " per day" } else { "" };
         let cmp = match (st.mean, pst.mean, reliable) {
-            (Some(a), Some(b), true) => format!("{} per day vs the {label} ({}).", format::delta(metric, a - b, &s), fmt(b)),
-            (Some(_), _, _) => format!("Not enough data to compare with the {label}."),
+            (Some(a), Some(b), true) => format!("{}{per_day} vs {label} ({}).", format::delta(metric, a - b, &s), fmt(b)),
+            (Some(_), _, _) => format!("Not enough data to compare with {label}."),
             _ => String::new(),
         };
         let readings = matches!(metric, Metric::HeartRate | Metric::Spo2);
@@ -634,7 +683,10 @@ fn PeriodStats(metric: Metric, range: Range) -> impl IntoView {
             notes.push("Today is left out of averages and comparisons until the day is complete.".to_string());
         }
         if ex_scope > 0 {
-            notes.push(format!("{ex_scope} day(s) report a different calorie type (for example live values that don't say whether they are total or active) and are left out."));
+            notes.push(match scope {
+                Some(Variant::Hrv(m)) => format!("{ex_scope} day(s) measured with a method other than {} are left out; HRV methods aren't comparable.", m.label()),
+                _ => format!("{ex_scope} day(s) report a different calorie type (for example live values that don't say whether they are total or active) and are left out."),
+            });
         }
         view! {
             <Section title="Summary">
@@ -656,8 +708,8 @@ fn PeriodStats(metric: Metric, range: Range) -> impl IntoView {
                             view! { <p class="muted">{format!("Goal reached on {met} of {} recorded days.", cur.len())}</p> }
                         })}
                         {(metric == Metric::Calories).then(|| view! { <p class="muted">{match scope {
-                            Some(CalorieScope::Total) => "Statistics use total calories (including resting energy), as reported by the source.",
-                            Some(CalorieScope::Active) => "Statistics use active calories only, as reported by the source.",
+                            Some(Variant::Calories(CalorieScope::Total)) => "Statistics use total calories (including resting energy), as reported by the source.",
+                            Some(Variant::Calories(CalorieScope::Active)) => "Statistics use active calories only, as reported by the source.",
                             _ => "The source doesn't say whether these are total or active calories.",
                         }}</p> })}
                         {notes.into_iter().map(|n| view! { <p class="muted">{n}</p> }).collect_view()}
@@ -776,7 +828,8 @@ fn MetricExtras(metric: Metric, range: Range) -> impl IntoView {
                     .map(|i| time::week_start(anchor) - Duration::days(7 * i))
                     .filter(|w| *w <= today)
                     .map(|w| {
-                        let vals: Vec<f64> = app.summaries.with(|idx| idx.series(Metric::Steps, w, w + Duration::days(6)).into_iter().filter_map(|(_, v)| v).collect());
+                        // Complete days only: today's count is still growing.
+                        let vals: Vec<f64> = app.summaries.with(|idx| idx.series(Metric::Steps, w, w + Duration::days(6)).into_iter().filter(|(d, _)| *d != today).filter_map(|(_, v)| v).collect());
                         let met = vals.iter().filter(|v| **v >= goal).count();
                         vec![
                             format!("{} – {}", w.format("%-d %b"), (w + Duration::days(6)).format("%-d %b")),
@@ -818,7 +871,7 @@ fn MetricExtras(metric: Metric, range: Range) -> impl IntoView {
                         let (lo, hi) = bounds.get(*k).cloned().unwrap_or((None, None));
                         vec![
                             airspace_core::HrZone::parse(k).map(|z| z.label()).unwrap_or(k).to_string(),
-                            format!("{:.0} min", mins.get(*k).copied().unwrap_or(0.0)),
+                            mins.get(*k).map(|m| time::fmt_minutes(*m)).unwrap_or_else(|| "Not provided".into()),
                             match (lo, hi) { (Some(a), Some(b)) => format!("{a:.0}–{b:.0} bpm"), _ => "Not provided".into() },
                         ]
                     })
@@ -831,8 +884,11 @@ fn MetricExtras(metric: Metric, range: Range) -> impl IntoView {
                 }.into_any()
             }
             Metric::Hrv => {
-                let excluded: u32 = extras.iter().map(|e| if let SummaryExtra::Hrv { excluded_other_methods, .. } = e { *excluded_other_methods } else { 0 }).sum();
-                let method = extras.iter().find_map(|e| if let SummaryExtra::Hrv { method, .. } = e { Some(method.label()) } else { None }).unwrap_or("unspecified");
+                // Same-day records with another method, plus whole days measured differently.
+                let within: u32 = extras.iter().map(|e| if let SummaryExtra::Hrv { excluded_other_methods, .. } = e { *excluded_other_methods } else { 0 }).sum();
+                let (_, variant, other_days) = app.summaries.with(|i| i.consistent_series(Metric::Hrv, from, to));
+                let excluded = within as usize + other_days;
+                let method = match variant { Some(Variant::Hrv(m)) => m.label(), _ => "unspecified" };
                 view! {
                     <Section title="Measurement method">
                         <p>{format!("Values shown are {method}, in milliseconds.")}</p>

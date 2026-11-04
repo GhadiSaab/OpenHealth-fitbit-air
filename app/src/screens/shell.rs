@@ -1,6 +1,6 @@
 //! App shell: boot, routing, theming and global overlays.
 
-use crate::platform::{self, ls_get, ls_set, now_ms};
+use crate::platform::{self, ls_set, now_ms};
 use crate::screens::{coach, explore, journal, onboarding, profile, today};
 use crate::state::{App, LS_DAY, LS_ROUTE, Route};
 use crate::ui::widgets::{BusyOverlay, SheetHost, TabBar, ToastHost};
@@ -39,7 +39,9 @@ pub fn Shell() -> impl IntoView {
     // Routing: keep the URL hash in sync so Back works (browser and Android).
     Effect::new(move |prev: Option<Route>| {
         let r = app.route.get();
-        // A sheet belongs to the screen that opened it.
+        // A sheet belongs to the screen that opened it. Its history entry is
+        // simply abandoned here (going Back for it would undo the navigation).
+        crate::ui::widgets::sheet_history_popped();
         app.sheet.set(None);
         let h = r.to_hash();
         if let Some(doc) = platform::window().document() {
@@ -47,7 +49,16 @@ pub fn Shell() -> impl IntoView {
         }
         let loc = platform::window().location();
         if loc.hash().unwrap_or_default() != h {
-            let _ = loc.set_hash(&h);
+            // The first screen and leaving onboarding replace the current history
+            // entry, so Back never returns to onboarding or an empty URL.
+            if prev.is_none() || prev == Some(Route::Onboarding) {
+                if let Ok(href) = loc.href() {
+                    let base = href.split('#').next().unwrap_or("").to_string();
+                    let _ = loc.replace(&format!("{base}{h}"));
+                }
+            } else {
+                let _ = loc.set_hash(&h);
+            }
         }
         if r != Route::Onboarding {
             ls_set(LS_ROUTE, &h);
@@ -55,8 +66,15 @@ pub fn Shell() -> impl IntoView {
         // Switching the range of the same metric keeps your place: focus stays on
         // the range control instead of jumping to the top of the screen.
         let same_metric = matches!((prev, r), (Some(Route::Metric(a, _)), Route::Metric(b, _)) if a == b);
+        // Remember where Explore was scrolled, and go back there.
+        if prev == Some(Route::Explore) {
+            platform::with_scroll_memory(|m| m.0 = platform::scroll_y());
+        }
         if same_metric {
             set_timeout(|| platform::focus_selector(".detail-controls [role=radio][aria-checked=true]"), std::time::Duration::from_millis(30));
+        } else if r == Route::Explore && matches!(prev, Some(Route::Metric(..))) {
+            let y = platform::with_scroll_memory(|m| m.0);
+            set_timeout(move || platform::window().scroll_to_with_x_and_y(0.0, y), std::time::Duration::from_millis(60));
         } else {
             platform::scroll_top();
             // Move focus to the new screen's heading for screen-reader users.
@@ -66,11 +84,29 @@ pub fn Shell() -> impl IntoView {
     });
     listen(win.as_ref(), "hashchange", move |_| {
         if let Some(r) = Route::from_hash(&platform::window().location().hash().unwrap_or_default()) {
+            // Once set up, the welcome screen is never a Back destination.
+            let r = if r == Route::Onboarding && app.settings.with_untracked(|s| s.onboarded) { Route::Today } else { r };
             if r != app.route.get_untracked() {
                 app.route.set(r);
             }
         }
     });
+    // Back closes an open sheet instead of leaving the screen.
+    listen(win.as_ref(), "popstate", move |_| {
+        if app.sheet.with_untracked(|s| s.is_some()) && crate::ui::widgets::sheet_history_pushed() {
+            crate::ui::widgets::sheet_history_popped();
+            app.sheet.set(None);
+        }
+    });
+    // Hide the tab bar while the on-screen keyboard is open (visual viewport shrinks).
+    if let Some(vv) = win.visual_viewport() {
+        listen(vv.as_ref(), "resize", move |_| {
+            let w = platform::window();
+            let full = w.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let visible = w.visual_viewport().map(|v| v.height()).unwrap_or(full);
+            platform::set_root_attr("data-keyboard", if full > 0.0 && visible < full * 0.75 { "open" } else { "closed" });
+        });
+    }
     Effect::new(move |_| ls_set(LS_DAY, &time::day_key(app.day.get())));
 
     // Clock, connectivity and viewport.
@@ -109,14 +145,14 @@ pub fn Shell() -> impl IntoView {
             }
             app.day.set(saved.min(app.today_untracked()));
         }
-        let start = if !app.settings.with_untracked(|s| s.onboarded) {
-            Route::Onboarding
-        } else {
-            let h = platform::window().location().hash().unwrap_or_default();
-            Route::from_hash(&h).or_else(|| ls_get(LS_ROUTE).and_then(|h| Route::from_hash(&h))).filter(|r| *r != Route::Onboarding).unwrap_or(Route::Today)
-        };
-        app.route.set(start);
+        // The route was restored synchronously in App::new; only onboarding overrides it.
+        if !app.settings.with_untracked(|s| s.onboarded) {
+            app.route.set(Route::Onboarding);
+        }
         app.ready.set(true);
+        if let Some(el) = platform::window().document().and_then(|d| d.get_element_by_id("preboot")) {
+            el.remove();
+        }
     });
     platform::register_service_worker();
 

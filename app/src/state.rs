@@ -180,6 +180,9 @@ pub struct App {
     pub ai: RwSignal<Option<AiConfig>>,
     /// Browser only: the AI key, kept in memory and never persisted.
     pub ai_key_mem: RwSignal<Option<String>>,
+    /// Browser only: the endpoint the in-memory key was entered for; the key is
+    /// only ever sent there.
+    pub ai_key_endpoint: RwSignal<Option<String>>,
     /// Android: whether a key is stored in the Keystore-backed vault.
     pub ai_native_key: RwSignal<bool>,
     pub online: RwSignal<bool>,
@@ -214,13 +217,24 @@ impl App {
             _ => DbKind::Personal,
         };
         let day = ls_get(LS_DAY).as_deref().and_then(time::parse_day).filter(|d| *d <= today).unwrap_or(today);
+        // Restore the screen synchronously (deep link first, then last screen) so
+        // nothing overwrites it before startup finishes.
+        let route = if !settings.onboarded {
+            Route::Onboarding
+        } else {
+            let h = platform::window().location().hash().unwrap_or_default();
+            // A bare URL (no hash) means "where I left off", not Today.
+            let bare = h.trim_start_matches('#').trim_start_matches('/').is_empty();
+            let linked = if bare { None } else { Route::from_hash(&h) };
+            linked.or_else(|| ls_get(LS_ROUTE).and_then(|h| Route::from_hash(&h))).filter(|r| *r != Route::Onboarding).unwrap_or(Route::Today)
+        };
         App {
             settings: RwSignal::new(settings),
             db: RwSignal::new(db),
             summaries: RwSignal::new(SummaryIndex::default()),
             journal: RwSignal::new(vec![]),
             batches: RwSignal::new(vec![]),
-            route: RwSignal::new(Route::Today),
+            route: RwSignal::new(route),
             day: RwSignal::new(day),
             ready: RwSignal::new(false),
             busy: RwSignal::new(None),
@@ -230,6 +244,7 @@ impl App {
             sheet: RwSignal::new(None),
             ai: RwSignal::new(ls_get_json(LS_AI)),
             ai_key_mem: RwSignal::new(None),
+            ai_key_endpoint: RwSignal::new(None),
             ai_native_key: RwSignal::new(false),
             online: RwSignal::new(platform::is_online()),
             now: RwSignal::new(now_ms()),
@@ -543,8 +558,10 @@ where
         let load = load.clone();
         spawn_local(async move {
             let v = load(k).await;
-            if seq.get_value() == mine {
-                out.set(Some(v));
+            // The screen may be gone by now: its signals are disposed, so only
+            // write if they still exist and this is still the latest request.
+            if seq.try_get_value() == Some(mine) {
+                let _ = out.try_set(Some(v));
             }
         });
     });

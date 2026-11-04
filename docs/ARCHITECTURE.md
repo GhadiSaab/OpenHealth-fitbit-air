@@ -89,8 +89,11 @@ one `superseded_by`, keeping it in the database and backups.
   a higher-ranked source, so history and live recording combine without
   double counting.
 * **Cumulative counters** are differenced; a decrease is a reset (the new
-  reading counts from zero); implausible jumps are rejected. Readings are
-  never summed.
+  reading counts from zero, within its own day); implausible jumps are
+  rejected. Readings are never summed. An increment that spans midnight is
+  shared between the two days in proportion to time, using the readings just
+  before and after each day. Counters that reset daily and lifetime counters
+  are kept as separate series.
 * **HRV** uses one method per day (RMSSD preferred); others are counted and
   excluded, never averaged together.
 * **Calories** report total vs active only when the source says so.
@@ -107,6 +110,11 @@ hourly bars add up to the daily total. Large intraday series are bucketed
 * Calorie statistics use the energy type reported by most days; days with a
   different type (for example unspecified live values) are excluded and counted.
 * Heart rate and SpO₂ show the lowest and highest *readings*, not daily averages.
+* Periods are trailing windows ending on the selected day: week = 7 days,
+  month = 30 days, year = 52 weeks. The comparison is the window just before.
+* Heart-rate variability statistics use one method across the period (the one
+  most days report); calorie statistics likewise use one energy type.
+* Coverage is the part of the day actually covered by the data used.
 * Month views overlay a 7-day rolling average (needs at least 4 days per window).
 
 ## Insights

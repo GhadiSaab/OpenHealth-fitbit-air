@@ -122,8 +122,7 @@ async fn ai_key_status(app: tauri::AppHandle) -> CmdResult<bool> {
 }
 
 fn allowed_url(url: &str) -> bool {
-    let u = url.to_ascii_lowercase();
-    (u.starts_with("https://") || u.starts_with("http://localhost") || u.starts_with("http://127.0.0.1")) && !u.contains('?') && !u.contains('#')
+    ai::endpoint_url_allowed(url) && !url.contains('?') && !url.contains('#')
 }
 
 /// Sends a request built by `airspace_core::ai`, adding the key from the
@@ -250,5 +249,7 @@ mod tests {
         assert!(super::allowed_url("https://api.anthropic.com/v1/messages"));
         assert!(!super::allowed_url("http://evil.example/v1"));
         assert!(!super::allowed_url("https://x.example/v1?key=1"));
+        assert!(!super::allowed_url("http://localhost.attacker.example/v1"));
+        assert!(super::allowed_url("http://127.0.0.1:11434/v1/chat/completions"));
     }
 }

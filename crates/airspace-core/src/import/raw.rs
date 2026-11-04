@@ -15,11 +15,11 @@ pub struct RawRecord {
     #[serde(default)]
     pub kind: Option<String>,
     /// Instant timestamp (alias for `start` on instant/counter records).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "str_or_num")]
     pub time: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "str_or_num")]
     pub start: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "str_or_num")]
     pub end: Option<String>,
     /// Local day for daily totals (YYYY-MM-DD).
     #[serde(default)]
@@ -71,6 +71,17 @@ pub struct RawStage {
     pub end: String,
 }
 
+/// Accepts a timestamp as a JSON string or a number (epoch milliseconds).
+fn str_or_num<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    let v: Option<serde_json::Value> = Option::deserialize(d)?;
+    Ok(match v {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::String(s)) => Some(s),
+        Some(serde_json::Value::Number(n)) => Some(n.to_string()),
+        Some(other) => return Err(serde::de::Error::custom(format!("expected a timestamp, found {other}"))),
+    })
+}
+
 /// Source description shared by all records of one file.
 #[derive(Clone, Debug)]
 pub struct SourceInfo {
@@ -116,7 +127,7 @@ fn convert_unit(metric: Metric, value: f64, unit: Option<&str>) -> Result<f64, S
         (Metric::Distance, "mi" | "miles") => Some(value * 1609.344),
         (Metric::Distance, "ft" | "feet") => Some(value * 0.3048),
         (Metric::SkinTemperature, "delta_f" | "°f delta" | "f_delta") => Some(value * 5.0 / 9.0),
-        (Metric::Sleep, "h" | "hours") => Some(value * 60.0),
+        (Metric::Sleep | Metric::HeartRateZones, "h" | "hours") => Some(value * 60.0),
         (Metric::Sleep | Metric::HeartRateZones, "s" | "seconds") => Some(value / 60.0),
         (Metric::Calories, "kj") => Some(value / 4.184),
         (Metric::SkinTemperature, "c" | "°c" | "celsius" | "f" | "°f" | "fahrenheit") => {
@@ -198,8 +209,22 @@ pub fn to_measurement(r: &RawRecord, src: &SourceInfo, ctx: &ImportContext) -> R
             day = None;
         }
     }
-    if start_ms > ctx.now + 24 * 60 * MINUTE_MS {
+    // Allow a few minutes of clock skew, nothing more.
+    let skew = 10 * MINUTE_MS;
+    if start_ms > ctx.now + skew || end_ms.map(|e| e > ctx.now + skew && kind != SampleKind::DailyTotal).unwrap_or(false) {
         return Err("Timestamp is in the future.".into());
+    }
+    if kind == SampleKind::DailyTotal {
+        let today = time::local_day_in(ctx.now, tz);
+        if day.as_deref().and_then(time::parse_day).map(|d| d > today).unwrap_or(false) {
+            return Err("Daily total is for a day that hasn't happened yet.".into());
+        }
+    }
+    if metric.is_additive() && kind == SampleKind::Instant {
+        return Err(format!(
+            "A single {} reading can't be counted. Use kind \"interval\" (with start and end), \"daily_total\" (with day) or \"cumulative_counter\".",
+            metric.key()
+        ));
     }
     if start_ms < 946_684_800_000 {
         return Err("Timestamp is before the year 2000.".into());
@@ -208,6 +233,10 @@ pub fn to_measurement(r: &RawRecord, src: &SourceInfo, ctx: &ImportContext) -> R
     let mut detail = None;
     let mut value = r.value;
     if metric == Metric::Sleep {
+        // `value` may carry a unit (e.g. hours); `asleep_minutes` is always minutes.
+        if let Some(v) = value {
+            value = Some(convert_unit(metric, v, r.unit.as_deref())?);
+        }
         if kind != SampleKind::Session {
             return Err("Sleep records must be sessions with start and end.".into());
         }
@@ -254,6 +283,9 @@ pub fn to_measurement(r: &RawRecord, src: &SourceInfo, ctx: &ImportContext) -> R
     }
     let mut value = if metric == Metric::Sleep { value } else { convert_unit(metric, value, r.unit.as_deref())? };
     let (lo, hi) = plausible(metric);
+    // Running counters may legitimately exceed one day's range (lifetime totals);
+    // implausible jumps between readings are rejected during aggregation.
+    let (lo, hi) = if kind == SampleKind::CumulativeCounter { (0.0, f64::MAX) } else { (lo, hi) };
     if value < lo || value > hi {
         return Err(format!("Value {value} is outside the plausible range for {} ({lo}–{hi}).", metric.key()));
     }

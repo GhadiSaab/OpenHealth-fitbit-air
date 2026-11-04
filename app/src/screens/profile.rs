@@ -235,7 +235,7 @@ pub fn DataScreen() -> impl IntoView {
                     </div>
                 }.into_any()
             } else {
-                view! { <button id="delete-open" class="btn danger-outline" on:click=move |_| { confirm_delete.set(true); set_timeout(|| platform::focus_by_id("delete-cancel"), std::time::Duration::from_millis(30)); }><Icon name="trash" size=18 />{move || if app.db.get() == DbKind::Demo { "Delete demo data" } else { "Delete all my data" }}</button> }.into_any()
+                view! { <button id="delete-open" class="btn danger-outline" on:click=move |_| { confirm_delete.set(true); set_timeout(|| { platform::focus_by_id("delete-cancel"); platform::scroll_into_view(".confirm"); }, std::time::Duration::from_millis(30)); }><Icon name="trash" size=18 />{move || if app.db.get() == DbKind::Demo { "Delete demo data" } else { "Delete all my data" }}</button> }.into_any()
             }}
         </Section>
     }

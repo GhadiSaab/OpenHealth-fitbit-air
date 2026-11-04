@@ -66,8 +66,19 @@ impl PeriodComparison {
     }
 }
 
-fn mean_over(idx: &SummaryIndex, metric: Metric, from: NaiveDate, to: NaiveDate) -> (Option<f64>, usize, Vec<f64>) {
-    let vals: Vec<f64> = idx.series(metric, from, to).into_iter().filter_map(|(_, v)| v).collect();
+/// Like `mean_over`, but restricted to the variant (HRV method, calorie type)
+/// that dominates `[span_from, span_to]`, so compared periods use the same kind of value.
+fn mean_over_consistent(idx: &SummaryIndex, metric: Metric, from: NaiveDate, to: NaiveDate, span_from: NaiveDate, span_to: NaiveDate) -> (Option<f64>, usize, Vec<f64>) {
+    let variant = idx.majority_variant(metric, span_from, span_to);
+    let vals: Vec<f64> = time::days_inclusive(from, to)
+        .filter_map(|d| idx.get(metric, d))
+        .filter(|s| variant.is_none() || crate::aggregate::variant_of(s) == variant)
+        .filter_map(|s| s.value)
+        .collect();
+    stats_of(vals)
+}
+
+fn stats_of(vals: Vec<f64>) -> (Option<f64>, usize, Vec<f64>) {
     let n = vals.len();
     (if n == 0 { None } else { Some(vals.iter().sum::<f64>() / n as f64) }, n, vals)
 }
@@ -75,8 +86,9 @@ fn mean_over(idx: &SummaryIndex, metric: Metric, from: NaiveDate, to: NaiveDate)
 /// Compares the mean daily value of `[from, to]` with the equally long period before it.
 pub fn compare_periods(idx: &SummaryIndex, metric: Metric, from: NaiveDate, to: NaiveDate) -> PeriodComparison {
     let len = (to - from).num_days() + 1;
-    let (c, cn, _) = mean_over(idx, metric, from, to);
-    let (p, pn, _) = mean_over(idx, metric, from - Duration::days(len), from - Duration::days(1));
+    let pf = from - Duration::days(len);
+    let (c, cn, _) = mean_over_consistent(idx, metric, from, to, pf, to);
+    let (p, pn, _) = mean_over_consistent(idx, metric, pf, from - Duration::days(1), pf, to);
     PeriodComparison { current: c, previous: p, current_days: cn, previous_days: pn, days: len as usize }
 }
 
@@ -167,8 +179,8 @@ pub fn generate(idx: &SummaryIndex, today: NaiveDate, tz: &Tz, s: &Settings) -> 
     // Resting heart rate and HRV relative to a 28-day personal baseline.
     for (metric, steady) in [(Metric::RestingHeartRate, 1.5), (Metric::Hrv, 3.0)] {
         let base = (today - Duration::days(34), today - Duration::days(7));
-        let (cur, cn, _) = mean_over(idx, metric, w7.0, w7.1);
-        let (b, bn, _) = mean_over(idx, metric, base.0, base.1);
+        let (cur, cn, _) = mean_over_consistent(idx, metric, w7.0, w7.1, base.0, w7.1);
+        let (b, bn, _) = mean_over_consistent(idx, metric, base.0, base.1, base.0, w7.1);
         if cn >= 4 && bn >= 14 {
             let (cur, b) = (cur.unwrap(), b.unwrap());
             let d = cur - b;
@@ -247,7 +259,7 @@ pub fn generate(idx: &SummaryIndex, today: NaiveDate, tz: &Tz, s: &Settings) -> 
             title: "Step goal consistency".into(),
             body: format!(
                 "You reached {} steps on {met} of the {} complete days with step data in the last two weeks.",
-                fmt(Metric::Steps, s.step_goal as f64, s).replace(" steps", ""),
+                fmt(Metric::Steps, s.step_goal as f64, s).replace("\u{a0}steps", ""),
                 with.len()
             ),
             window: window(w14.0, w14.1, with.len()),

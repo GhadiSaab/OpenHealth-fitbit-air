@@ -149,7 +149,7 @@ const mock = http.createServer((req, res) => {
   const p2 = await fresh.newPage();
   await p2.goto(base);
   await p2.getByRole('button', { name: /Set up my device later/ }).click();
-  await p2.getByText('No data yet').waitFor();
+  await p2.getByRole('heading', { name: 'No data yet' }).waitFor();
   await p2.waitForTimeout(400);
   await p2.screenshot({ path: path.join(out, '28-empty.png') });
   console.log('saved 28-empty');

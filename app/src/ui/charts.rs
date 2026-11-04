@@ -14,7 +14,7 @@ use leptos::prelude::*;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Pt {
     /// Category label for the readout (e.g. "Tue 3 Nov").
     pub label: String,
@@ -29,9 +29,23 @@ pub struct Pt {
     pub note: Option<String>,
     /// A day that hasn't happened yet: drawn as nothing, not as "no data".
     pub future: bool,
+    /// An incomplete value (today so far): drawn lighter so it isn't read as a full day.
+    pub partial: bool,
 }
 
 pub use airspace_core::series::nice_ticks;
+
+/// Axis tick label. `compact` uses "K" for every tick ≥ 1,000 so one axis
+/// never mixes "5,000" and "10K". Negative values use a true minus sign.
+pub fn fmt_tick_axis(v: f64, compact: bool) -> String {
+    let t = if compact && v.abs() >= 1000.0 {
+        let k = v.abs() / 1000.0;
+        if (k - k.round()).abs() < 1e-9 { format!("{}K", k.round()) } else { format!("{k:.1}K") }
+    } else {
+        fmt_tick(v.abs())
+    };
+    if v < 0.0 { format!("−{t}") } else { t }
+}
 
 pub fn fmt_tick(v: f64) -> String {
     let a = v.abs();
@@ -46,6 +60,25 @@ pub fn fmt_tick(v: f64) -> String {
     } else {
         format!("{v:.1}")
     }
+}
+
+/// X-axis labels: every label when they are sparse (e.g. month names on a
+/// year view), otherwise every n-th counting back from the latest. Labels at
+/// the edges are anchored inwards so they are never clipped.
+fn x_labels(pts: &[Pt], w: f64, h: f64, left: f64, pos: impl Fn(usize) -> f64) -> Vec<(f64, &'static str, String)> {
+    let n = pts.len();
+    let named = pts.iter().filter(|p| !p.tick.is_empty()).count();
+    let every = if named <= 14 { 1 } else { ((n as f64) / 7.0).ceil().max(1.0) as usize };
+    let _ = h;
+    pts.iter()
+        .enumerate()
+        .filter(|(i, p)| !p.tick.is_empty() && (every == 1 || (n - 1 - i) % every == 0))
+        .map(|(i, p)| {
+            let x = pos(i);
+            let anchor = if x > w - 14.0 { "end" } else if x < left + 10.0 { "start" } else { "middle" };
+            (x, anchor, p.tick.clone())
+        })
+        .collect()
 }
 
 /// Path for an optional trend overlay (e.g. a 7-day rolling average),
@@ -115,11 +148,20 @@ fn last_with_data(pts: &[Pt]) -> Option<usize> {
 }
 
 #[component]
-fn Readout(pts: Arc<Vec<Pt>>, sel: RwSignal<Option<usize>>, #[prop(optional)] id: Option<String>) -> impl IntoView {
+fn Readout(
+    pts: Arc<Vec<Pt>>,
+    sel: RwSignal<Option<usize>>,
+    #[prop(optional)] id: Option<String>,
+    /// When set, shown instead of the selected point (e.g. a tap inside a recording gap).
+    #[prop(optional)] gap: Option<RwSignal<Option<String>>>,
+) -> impl IntoView {
     let p2 = pts.clone();
     view! {
         <div class="chart-readout" aria-live="polite" id=id>
             {move || {
+                if let Some(t) = gap.and_then(|g| g.get()) {
+                    return view! { <span class="readout-value">"No data recorded"</span><span class="readout-label">{t}</span> }.into_any();
+                }
                 let i = sel.get();
                 match i.and_then(|i| p2.get(i)) {
                     Some(p) => view! {
@@ -148,11 +190,12 @@ pub fn BarChart(
 ) -> impl IntoView {
     let w = width.unwrap_or(640.0);
     let h = height.unwrap_or(200.0);
-    let (left, top, bottom) = (44.0, 12.0, 26.0);
+    let (left, top, bottom) = (44.0, 12.0, 34.0);
     let n = pts.len();
     let max = pts.iter().filter_map(|p| p.v).chain(trend.iter().flatten().flatten().copied()).fold(goal.unwrap_or(0.0), f64::max).max(1.0);
     let ticks = nice_ticks(0.0, max, 3);
     let ymax = *ticks.last().unwrap_or(&max);
+    let compact = ymax >= 10_000.0;
     let plot_h = h - top - bottom;
     let y = move |v: f64| top + plot_h - v / ymax * plot_h;
     let slot = (w - left) / n.max(1) as f64;
@@ -184,11 +227,12 @@ pub fn BarChart(
                         yt + r
                     );
                     let met = goal.map(|g| v >= g).unwrap_or(false);
-                    view! { <path d=d class=format!("bar tone-{tone}") class:met=met /> }.into_any()
+                    view! { <path d=d class=format!("bar tone-{tone}") class:met=met class:partial=p.partial /> }.into_any()
                 }
                 Some(_) => view! { <rect x=format!("{:.1}", x0) y=format!("{:.1}", top + plot_h - 1.5) width=format!("{bw:.1}") height="1.5" class=format!("bar tone-{tone}") /> }.into_any(),
                 None if p.future => ().into_any(),
-                None => view! { <circle cx=format!("{cx:.1}") cy=format!("{:.1}", top + plot_h - 4.0) r="2.5" class="nodata-dot" /> }.into_any(),
+                // "No data" sits below the axis, so it can't be read as a value.
+                None => view! { <circle cx=format!("{cx:.1}") cy=format!("{:.1}", top + plot_h + 8.0) r="2.5" class="nodata-dot" /> }.into_any(),
             }
         })
         .collect_view();
@@ -199,16 +243,15 @@ pub fn BarChart(
             let yy = y(*t);
             view! {
                 <line x1=format!("{left}") x2=format!("{w}") y1=format!("{yy:.1}") y2=format!("{yy:.1}") class=if *t == 0.0 { "axis" } else { "grid" } />
-                <text x=format!("{:.1}", left - 8.0) y=format!("{:.1}", yy + 4.0) class="tick" text-anchor="end">{fmt_tick(*t)}</text>
+                <text x=format!("{:.1}", left - 8.0) y=format!("{:.1}", yy + 4.0) class="tick" text-anchor="end">{fmt_tick_axis(*t, compact)}</text>
             }
         })
         .collect_view();
-    let xlabels = pts
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| (n - 1 - i) % label_every == 0)
-        .map(|(i, p)| view! { <text x=format!("{:.1}", left + slot * (i as f64 + 0.5)) y=format!("{}", h - 6.0) class="tick" text-anchor="middle">{p.tick.clone()}</text> })
+    let xlabels = x_labels(&pts, w, h, left, |i| left + slot * (i as f64 + 0.5))
+        .into_iter()
+        .map(|(x, anchor, t)| view! { <text x=format!("{x:.1}") y=format!("{}", h - 4.0) class="tick" text-anchor=anchor>{t}</text> })
         .collect_view();
+    let _ = label_every;
     let trend_v = trend.as_ref().map(|t| {
         let d = trend_path(t, |i| left + slot * (i as f64 + 0.5), y);
         view! { <path d=d class="trend-line" /> }
@@ -217,7 +260,7 @@ pub fn BarChart(
         let yy = y(g);
         view! {
             <line x1=format!("{left}") x2=format!("{w}") y1=format!("{yy:.1}") y2=format!("{yy:.1}") class="goal-line" />
-            <text x=format!("{w}") y=format!("{:.1}", yy - 5.0) class="tick goal-label" text-anchor="end">"Goal"</text>
+            <text x=format!("{:.1}", left + 4.0) y=format!("{:.1}", yy - 5.0) class="tick goal-label" text-anchor="start">"Goal"</text>
         }
     });
     let pts_r = pts.clone();
@@ -264,10 +307,12 @@ pub fn LineChart(
     #[prop(optional)] height: Option<f64>,
     #[prop(optional)] deviation: bool,
     #[prop(default = None)] trend: Option<Vec<Option<f64>>>,
+    /// Physical upper limit of the scale (e.g. 100 for SpO₂).
+    #[prop(default = None)] cap: Option<f64>,
 ) -> impl IntoView {
     let w = width.unwrap_or(640.0);
     let h = height.unwrap_or(200.0);
-    let (left, top, bottom) = (44.0, 14.0, 26.0);
+    let (left, top, bottom) = (44.0, 14.0, 34.0);
     let n = pts.len();
     let vals: Vec<f64> = pts.iter().flat_map(|p| [p.v, p.lo, p.hi]).flatten().collect();
     let (mut lo, mut hi) = (vals.iter().cloned().fold(f64::INFINITY, f64::min), vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max));
@@ -281,7 +326,13 @@ pub fn LineChart(
         hi = m;
     }
     let pad = ((hi - lo) * 0.15).max(1e-6);
-    let ticks = nice_ticks(lo - pad, hi + pad, 3);
+    let mut ticks = nice_ticks(lo - pad, cap.map(|c| (hi + pad).min(c)).unwrap_or(hi + pad), 3);
+    if let Some(c) = cap {
+        ticks.retain(|t| *t <= c + 1e-9);
+        if ticks.last().map(|t| *t < hi).unwrap_or(true) {
+            ticks.push(c);
+        }
+    }
     let (ymin, ymax) = (*ticks.first().unwrap_or(&lo), *ticks.last().unwrap_or(&hi));
     let plot_h = h - top - bottom;
     let y = move |v: f64| top + plot_h - (v - ymin) / (ymax - ymin).max(1e-9) * plot_h;
@@ -332,7 +383,7 @@ pub fn LineChart(
                 .into_any()
             }
             None if p.future => ().into_any(),
-            None => view! { <circle cx=format!("{:.1}", xc(i)) cy=format!("{:.1}", top + plot_h - 4.0) r="2.5" class="nodata-dot" /> }.into_any(),
+            None => view! { <circle cx=format!("{:.1}", xc(i)) cy=format!("{:.1}", top + plot_h + 8.0) r="2.5" class="nodata-dot" /> }.into_any(),
         })
         .collect_view();
     let grid = ticks
@@ -342,16 +393,15 @@ pub fn LineChart(
             let cls = if deviation && t.abs() < 1e-9 { "axis" } else { "grid" };
             view! {
                 <line x1=format!("{left}") x2=format!("{w}") y1=format!("{yy:.1}") y2=format!("{yy:.1}") class=cls />
-                <text x=format!("{:.1}", left - 8.0) y=format!("{:.1}", yy + 4.0) class="tick" text-anchor="end">{if deviation && *t > 0.0 { format!("+{}", fmt_tick(*t)) } else { fmt_tick(*t) }}</text>
+                <text x=format!("{:.1}", left - 8.0) y=format!("{:.1}", yy + 4.0) class="tick" text-anchor="end">{if deviation && *t > 0.0 { format!("+{}", fmt_tick_axis(*t, false)) } else { fmt_tick_axis(*t, false) }}</text>
             }
         })
         .collect_view();
-    let xlabels = pts
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| (n - 1 - i) % label_every == 0)
-        .map(|(i, p)| view! { <text x=format!("{:.1}", xc(i)) y=format!("{}", h - 6.0) class="tick" text-anchor="middle">{p.tick.clone()}</text> })
+    let xlabels = x_labels(&pts, w, h, left, xc)
+        .into_iter()
+        .map(|(x, anchor, t)| view! { <text x=format!("{x:.1}") y=format!("{}", h - 4.0) class="tick" text-anchor=anchor>{t}</text> })
         .collect_view();
+    let _ = label_every;
     let p3 = pts.clone();
     let cross = move || {
         sel.get().map(|i| {
@@ -417,6 +467,8 @@ pub fn IntradayChart(
     #[prop(optional)] width: Option<f64>,
     #[prop(optional)] height: Option<f64>,
     #[prop(optional)] max_gap: Option<i64>,
+    /// Human-readable label per gap (same order as `gaps`), e.g. "13:00–16:30".
+    #[prop(default = vec![])] gap_labels: Vec<String>,
 ) -> impl IntoView {
     let w = width.unwrap_or(640.0);
     let h = height.unwrap_or(210.0);
@@ -431,7 +483,7 @@ pub fn IntradayChart(
         let hi = buckets.iter().map(|b| b.max).fold(f64::NEG_INFINITY, f64::max);
         if lo.is_finite() { (lo - 5.0, hi + 5.0) } else { (40.0, 120.0) }
     };
-    let ticks = nice_ticks(lo, hi, 3);
+    let ticks = nice_ticks(lo, hi, if bars { 3 } else { 5 });
     let (ymin, ymax) = (*ticks.first().unwrap_or(&lo), *ticks.last().unwrap_or(&hi));
     let y = move |v: f64| top + plot_h - (v - ymin) / (ymax - ymin).max(1e-9) * plot_h;
     let n = buckets.len();
@@ -519,7 +571,7 @@ pub fn IntradayChart(
         })
         .collect_view();
     let pts: Arc<Vec<Pt>> = Arc::new(
-        buckets.iter().map(|b| Pt { label: b.label.clone(), tick: String::new(), v: Some(b.avg), lo: None, hi: None, text: b.text.clone(), note: None, future: false }).collect(),
+        buckets.iter().map(|b| Pt { label: b.label.clone(), v: Some(b.avg), text: b.text.clone(), ..Default::default() }).collect(),
     );
     let summary = summarize_pts(&title, &pts);
     let sel = RwSignal::new(if n > 0 { Some(n - 1) } else { None });
@@ -535,20 +587,30 @@ pub fn IntradayChart(
         })
     };
     let bk3 = bk.clone();
+    let gap_hit = RwSignal::new(None::<String>);
+    let gaps_c = Arc::new(gaps.clone());
+    let gap_labels = Arc::new(gap_labels);
     let pick = move |ev: leptos::ev::PointerEvent| {
         let Some(el) = ev.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) else { return };
         let r = el.get_bounding_client_rect();
         let scale = if r.width() > 0.0 { w / r.width() } else { 1.0 };
         let px = (ev.client_x() as f64 - r.left()) * scale;
         let t = from + ((px - left) / (w - left) * span) as i64;
+        // Inside a recording gap: say so rather than showing a neighbouring value.
+        if let Some(g) = gaps_c.iter().position(|(a, b)| t >= *a && t < *b) {
+            gap_hit.set(Some(gap_labels.get(g).cloned().unwrap_or_else(|| "No recording".into())));
+            return;
+        }
+        gap_hit.set(None);
         if let Some((i, _)) = bk3.iter().enumerate().min_by_key(|(_, b)| ((b.t0 + b.t1) / 2 - t).abs()) {
             sel.set(Some(i));
         }
     };
     let pick2 = pick.clone();
+    let key = on_key(n, sel);
     view! {
         <figure class="chart">
-            <Readout pts=pts sel=sel />
+            <Readout pts=pts sel=sel gap=gap_hit />
             <svg
                 viewBox=format!("0 0 {w} {h}")
                 width="100%"
@@ -557,7 +619,7 @@ pub fn IntradayChart(
                 aria-roledescription="chart"
                 tabindex="0"
                 aria-label=summary.clone()
-                on:keydown=on_key(n, sel)
+                on:keydown=move |ev| { gap_hit.set(None); key(ev) }
                 on:pointermove=pick
                 on:pointerdown=pick2
             >
@@ -631,7 +693,7 @@ pub fn SleepTimeline(
         segs.iter()
             .map(|s| {
                 let text = describe.as_ref().map(|f| f(s)).unwrap_or_default();
-                Pt { label: STAGE_ROWS[row(s.stage)].1.to_string(), tick: String::new(), v: Some(1.0), lo: None, hi: None, text, note: None, future: false }
+                Pt { label: STAGE_ROWS[row(s.stage)].1.to_string(), v: Some(1.0), text, ..Default::default() }
             })
             .collect(),
     );
@@ -719,7 +781,7 @@ pub fn Ring(fraction: f64, tone: &'static str, #[prop(optional)] size: Option<f6
     view! {
         <svg class="ring" viewBox=format!("0 0 {s} {s}") width=format!("{s}") height=format!("{s}") aria-hidden="true" focusable="false">
             <circle cx=format!("{}", s / 2.0) cy=format!("{}", s / 2.0) r=format!("{r}") class="ring-track" stroke-width=format!("{stroke}") fill="none" />
-            <circle
+            {(f > 0.0).then(|| view! { <circle
                 cx=format!("{}", s / 2.0)
                 cy=format!("{}", s / 2.0)
                 r=format!("{r}")
@@ -729,7 +791,7 @@ pub fn Ring(fraction: f64, tone: &'static str, #[prop(optional)] size: Option<f6
                 stroke-linecap="round"
                 stroke-dasharray=format!("{:.2} {:.2}", c * f, c)
                 transform=format!("rotate(-90 {} {})", s / 2.0, s / 2.0)
-            />
+            /> })}
         </svg>
     }
 }

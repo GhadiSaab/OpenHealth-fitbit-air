@@ -107,7 +107,7 @@ impl Display {
         } else if self.unit == "%" {
             format!("{}%", self.number)
         } else {
-            format!("{} {}", self.number, self.unit)
+            format!("{}\u{a0}{}", self.number, self.unit)
         }
     }
 }
@@ -131,8 +131,7 @@ pub fn display(metric: Metric, value: f64, s: &Settings) -> Display {
         Unit::Bpm => Display { number: format!("{}", value.round() as i64), unit: "bpm".into() },
         Unit::Minutes => {
             if metric == Metric::Sleep {
-                let m = value.round() as i64;
-                Display { number: format!("{}:{:02}", m / 60, m % 60), unit: "h".into() }
+                Display { number: crate::time::fmt_minutes(value), unit: String::new() }
             } else {
                 Display { number: format!("{}", value.round() as i64), unit: "min".into() }
             }
@@ -151,7 +150,7 @@ pub fn display(metric: Metric, value: f64, s: &Settings) -> Display {
                 TempUnit::Fahrenheit => (value * 9.0 / 5.0, "°F"),
             };
             let r = (v * 10.0).round() / 10.0;
-            let sign = if r > 0.0 { "+" } else if r < 0.0 { "−" } else { "±" };
+            let sign = if r > 0.0 { "+" } else if r < 0.0 { "−" } else { "" };
             Display { number: format!("{sign}{:.1}", r.abs()), unit: u.into() }
         }
         Unit::BreathsPerMinute => Display { number: format!("{:.1}", value), unit: "br/min".into() },
@@ -203,18 +202,18 @@ mod tests {
     fn temperature_delta_converts_without_offset() {
         let mut s = Settings::default();
         s.temperature = TempUnit::Fahrenheit;
-        assert_eq!(display(Metric::SkinTemperature, 1.0, &s).joined(), "+1.8 °F");
+        assert_eq!(display(Metric::SkinTemperature, 1.0, &s).joined(), "+1.8\u{a0}°F");
         s.temperature = TempUnit::Celsius;
-        assert_eq!(display(Metric::SkinTemperature, -0.4, &s).joined(), "−0.4 °C");
-        assert_eq!(display(Metric::SkinTemperature, -0.04, &s).joined(), "±0.0 °C");
+        assert_eq!(display(Metric::SkinTemperature, -0.4, &s).joined(), "−0.4\u{a0}°C");
+        assert_eq!(display(Metric::SkinTemperature, -0.04, &s).joined(), "0.0\u{a0}°C");
     }
 
     #[test]
     fn distance_units() {
         let mut s = Settings::default();
-        assert_eq!(display(Metric::Distance, 5000.0, &s).joined(), "5.00 km");
+        assert_eq!(display(Metric::Distance, 5000.0, &s).joined(), "5.00\u{a0}km");
         s.units = UnitSystem::Imperial;
-        assert_eq!(display(Metric::Distance, 1609.344, &s).joined(), "1.00 mi");
+        assert_eq!(display(Metric::Distance, 1609.344, &s).joined(), "1.00\u{a0}mi");
     }
 
     #[test]

@@ -119,3 +119,35 @@ fn dst_ambiguous_time_warns() {
     assert_eq!(p.records.len(), 1);
     assert_eq!(p.warnings(), 1);
 }
+
+#[test]
+fn conflict_within_one_file_prefer_incoming_keeps_one_active() {
+    let s = r#"{"schema":"airspace.import","version":1,"records":[
+      {"metric":"resting_heart_rate","time":"2026-06-01T07:00:00Z","value":50},
+      {"metric":"resting_heart_rate","time":"2026-06-01T07:00:00Z","value":52}]}"#;
+    let p = parse_file("a.json", s, &ctx());
+    let pv = preview(&p, &[], &ctx().default_tz);
+    let plan = plan_merge(p.records.clone(), &pv.classes, ConflictPolicy::PreferIncoming);
+    assert_eq!(plan.insert.len(), 2);
+    assert_eq!(plan.insert.iter().filter(|m| m.is_active()).count(), 1);
+    assert!(plan.supersede.is_empty());
+}
+
+#[test]
+fn sleep_value_in_hours_and_lifetime_counters_and_future_and_numeric_time() {
+    let s = r#"{"schema":"airspace.import","version":1,"records":[
+      {"metric":"sleep","start":"2026-06-01T23:00:00Z","end":"2026-06-02T07:00:00Z","value":7.5,"unit":"h"},
+      {"metric":"steps","kind":"cumulative_counter","time":"2026-06-02T08:00:00Z","value":250000},
+      {"metric":"steps","kind":"daily_total","day":"2026-09-23","value":5000},
+      {"metric":"steps","time":"2026-06-02T09:00:00Z","value":40},
+      {"metric":"heart_rate","time":1780300800000,"value":60},
+      {"metric":"heart_rate_zones","kind":"daily_total","day":"2026-06-02","zone":"cardio","value":0.5,"unit":"h"}]}"#;
+    let p = parse_file("a.json", s, &ctx());
+    let sleep = p.records.iter().find(|m| m.metric == Metric::Sleep).unwrap();
+    assert_eq!(sleep.value, 450.0);
+    assert!(p.records.iter().any(|m| m.kind == SampleKind::CumulativeCounter && m.value == 250000.0));
+    assert!(p.records.iter().any(|m| m.metric == Metric::HeartRate));
+    assert!(p.records.iter().any(|m| m.metric == Metric::HeartRateZones && m.value == 30.0));
+    // tomorrow's daily total and an instant step reading are rejected
+    assert_eq!(p.errors(), 2, "{:#?}", p.issues);
+}
