@@ -200,7 +200,8 @@ pub fn fmt_minutes(min: f64) -> String {
     } else if m % 60 == 0 {
         format!("{}\u{a0}h", m / 60)
     } else {
-        format!("{}\u{a0}h\u{a0}{}\u{a0}min", m / 60, m % 60)
+        // Each number stays with its unit; a long value may wrap between the two parts.
+        format!("{}\u{a0}h {}\u{a0}min", m / 60, m % 60)
     }
 }
 

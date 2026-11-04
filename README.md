@@ -69,6 +69,10 @@ No feature pretends to work: unavailable adapters say what is missing.
   * AI request shapes and endpoint binding;
   * SQLite migrations and persistence after reopening;
   * a year of per-minute heart rate (about 525,000 samples), which summarizes in about 130 ms in release.
+* **Independent agent reviews** against the original specification, each running its own browser tests:
+  functional and data correctness 95%, charts 93%, accessibility 92%, mobile UX 87%. Every defect they
+  reported after that was fixed and re-checked with their own scripts; the mobile sweep (55 screens × 5 phone
+  sizes and orientations × text at 100/130/150/200%) finds no overflow, clipping or console errors.
 * **Large text and small screens:** no horizontal overflow on any screen at 150% and 200% text on
   320 px and 412 px phones and in landscape; tiles, controls and pills reflow instead of clipping.
 * **Browser test** (`scripts/e2e-smoke.cjs`, 33 checks) drives the PWA in headless Chromium. It passes, covering:

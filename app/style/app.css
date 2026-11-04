@@ -266,7 +266,8 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .period-label { font-weight: 650; min-width: 0; flex: 1; text-align: center; overflow-wrap: anywhere; }
 .period-nav { min-width: 0; max-width: 100%; }
 .detail-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--s4); }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s3); margin: 0; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5em), 1fr)); gap: var(--s3); margin: 0; }
+.stat-grid > div { min-width: 0; }
 .stat-grid div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s3) var(--s4); }
 .stat-grid dt { font-size: var(--fs-sm); color: var(--muted); font-weight: 550; }
 .stat-grid dd { margin: 2px 0 0; font-size: var(--fs-lg); font-weight: 680; }
@@ -456,6 +457,7 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .cal-val { font-size: 11px; font-weight: 550; color: var(--muted); }
 .cal-day.goal-met { background: color-mix(in srgb, var(--activity) 16%, transparent); }
 .cal-day.goal-met .cal-val { color: var(--ink); }
+.cal-day.out.goal-met { color: var(--ink-2); }
 .cal-day.sel .cal-val { color: var(--page); }
 .trend-line { fill: none; stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
 .legend-trend { display: inline-flex; align-items: center; gap: var(--s2); }
@@ -520,7 +522,9 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 
 /* ---- Mobile refinements ---------------------------------------------- */
 /* Values never break mid-number; long ones shrink a little on narrow phones. */
-.tile-value { font-size: clamp(1.375rem, 7vw, 2rem); max-width: 100%; }
+.tile:not(.hero) { container-type: inline-size; }
+/* Sized to the tile itself (not the screen), so values fit 2- or 3-up layouts. */
+.tile-value { font-size: clamp(1.125rem, 15cqi, 2rem); max-width: 100%; }
 .tile, .hero-text, .insight, .insight-head h3, .metric-row > * { min-width: 0; }
 /* Large text (Android font scaling, browser zoom): tiles drop to one column
    instead of clipping values. rem tracks the user's text size. */
@@ -589,3 +593,7 @@ body:has(.app) .preboot { display: none; }
 .fav-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); }
 @media (min-width: 560px) { .fav-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); } }
 .fav-grid > * { min-width: 0; }
+/* Safety net for very large text: long words wrap instead of overflowing. */
+.screen-header h1 { overflow-wrap: break-word; hyphens: auto; min-width: 0; }
+main p, main dd, main li, main code, .stat-grid dd { overflow-wrap: break-word; }
+.app.with-tabs > .main { min-width: 0; }
