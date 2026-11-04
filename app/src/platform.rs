@@ -159,6 +159,14 @@ pub fn focus_by_id(id: &str) {
     }
 }
 
+pub fn focus_selector(sel: &str) {
+    if let Some(el) = window().document().and_then(|d| d.query_selector(sel).ok().flatten()) {
+        if let Ok(h) = el.dyn_into::<web_sys::HtmlElement>() {
+            let _ = h.focus();
+        }
+    }
+}
+
 pub fn scroll_top() {
     window().scroll_to_with_x_and_y(0.0, 0.0);
 }

@@ -117,7 +117,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; 
 .btn.primary:hover { opacity: .92; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--ink-2); }
 .btn.quiet:hover { background: var(--surface-2); }
-.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger, #fff); }
 .btn.danger-outline { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); background: transparent; }
 .btn.small { min-height: 48px; padding: 0 var(--s4); }
 .btn:disabled { opacity: .45; transform: none; }
@@ -134,17 +134,20 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; 
 .chip:disabled { opacity: .45; }
 .chip-wrap, .day-chips, .quick-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .file-btn { position: relative; }
+.file-btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .file-btn input { inset: 0; }
 
 /* ---- Segmented / switch -------------------------------------------- */
 .segmented { display: inline-flex; background: var(--surface-2); border-radius: var(--r-pill); padding: 3px; gap: 2px; max-width: 100%; }
 .seg { min-height: 48px; min-width: 64px; padding: 0 var(--s4); border: 0; border-radius: var(--r-pill); background: transparent; font-weight: 600; font-size: var(--fs-sm); color: var(--ink-2); transition: background var(--t-fast) var(--ease), color var(--t-fast); }
-.seg.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
-.switch { width: 52px; height: 32px; border-radius: var(--r-pill); border: 0; background: var(--surface-3); position: relative; flex: none; transition: background var(--t-med) var(--ease); }
-.switch .knob { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .25); transition: transform var(--t-med) var(--ease); }
-.switch[aria-checked="true"] { background: var(--accent); }
-.switch[aria-checked="true"] .knob { transform: translateX(20px); }
+.seg.on { background: var(--ink); color: var(--page); }
+.switch { min-width: 56px; min-height: 48px; display: inline-grid; place-items: center; border: 0; background: none; padding: 0; flex: none; border-radius: var(--r-pill); }
+.switch .track { width: 52px; height: 32px; border-radius: var(--r-pill); background: var(--surface); border: 2px solid var(--control-border); position: relative; transition: background var(--t-med) var(--ease), border-color var(--t-med) var(--ease); }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--control-border); transition: transform var(--t-med) var(--ease), background var(--t-med); }
+.switch[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
+.switch[aria-checked="true"] .knob { transform: translateX(20px); background: #fff; }
 .switch:disabled { opacity: .45; }
+.switch-row { cursor: pointer; }
 
 /* ---- Rows and fields ------------------------------------------------ */
 .row { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); min-height: 56px; padding: var(--s2) 0; border-bottom: 1px solid var(--line); }
@@ -157,7 +160,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; 
 .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); margin: var(--s3) 0 var(--s2); display: block; }
 .field .field-label { margin: 0; }
 input[type=text], input[type=url], input[type=password], input[type=number], input[type=date], input[type=time], select, textarea {
-  min-height: var(--touch); border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: var(--s2) var(--s3); width: 100%;
+  min-height: var(--touch); border: 1px solid var(--control-border); background: var(--surface); border-radius: var(--r-sm); padding: var(--s2) var(--s3); width: 100%;
 }
 textarea { resize: vertical; line-height: var(--lh); }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
@@ -211,7 +214,7 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .tile-sub { font-size: var(--fs-sm); color: var(--muted); }
 .hero-text { display: flex; flex-direction: column; gap: 2px; }
 .hero-value { font-size: var(--fs-hero); font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: proportional-nums; }
-.muted.hero-value, .muted.tile-value { color: var(--axis); }
+.muted.hero-value, .muted.tile-value { color: var(--muted); }
 .pill { display: inline-flex; align-items: center; min-height: 24px; padding: 0 var(--s2); border-radius: var(--r-pill); font-size: var(--fs-xs); font-weight: 650; background: var(--surface-2); color: var(--ink-2); margin: var(--s1) 0; }
 .pill.live { background: color-mix(in srgb, var(--ok) 18%, var(--surface)); color: var(--ok); }
 .pill.recent { background: color-mix(in srgb, var(--oxygen) 16%, var(--surface)); color: var(--ink); }
@@ -298,13 +301,13 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .line { fill: none; stroke: var(--tone); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .line.thin { stroke-width: 1.75; }
 .band { fill: var(--tone); opacity: .14; }
-.whisker { stroke: var(--tone); stroke-width: 2; opacity: .45; stroke-linecap: round; }
+.whisker { stroke: var(--tone); stroke-width: 2; opacity: .85; stroke-linecap: round; }
 .marker { fill: var(--tone); stroke: var(--surface); stroke-width: 2; }
 .marker.focus { stroke-width: 3; }
 .nodata-dot { fill: none; stroke: var(--axis); stroke-width: 1.5; }
 .crosshair { stroke: var(--ink-2); stroke-width: 1; opacity: .5; }
 .select-band { fill: var(--ink); opacity: .05; }
-.goal-line { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 0; opacity: .55; }
+.goal-line { stroke: var(--ink-2); stroke-width: 1.5; }
 .goal-label { fill: var(--ink-2); }
 .gap-band { fill: var(--surface-2); }
 .gap-label { fill: var(--muted); font-size: 11px; }
@@ -419,7 +422,7 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 @keyframes fade { from { opacity: 0; } }
 .toast-region { position: fixed; left: 0; right: 0; bottom: calc(84px + env(safe-area-inset-bottom)); display: grid; justify-items: center; z-index: 50; pointer-events: none; padding: 0 var(--s4); }
 .toast { pointer-events: auto; display: flex; align-items: center; gap: var(--s3); background: var(--ink); color: var(--page); padding: var(--s2) var(--s2) var(--s2) var(--s4); border-radius: var(--r-md); box-shadow: var(--shadow); max-width: 560px; animation: rise var(--t-med) var(--ease); }
-.toast.error { background: var(--danger); color: #fff; }
+.toast.error { background: var(--danger); color: var(--on-danger, #fff); }
 .toast .icon-btn { color: inherit; }
 .busy { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--page) 80%, transparent); display: grid; place-content: center; justify-items: center; gap: var(--s3); }
 .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--surface-3); border-top-color: var(--ink); animation: spin .9s linear infinite; }
@@ -479,3 +482,31 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .rec-main { display: flex; justify-content: space-between; gap: var(--s3); }
 .rec-kind { font-size: var(--fs-sm); color: var(--ink-2); }
 .rec-prov { font-size: var(--fs-xs); color: var(--muted); overflow-wrap: anywhere; }
+
+/* Fields and placeholders */
+::placeholder { color: var(--muted); opacity: 1; }
+/* Keep focused controls clear of the fixed tab bar on phones. */
+@media (max-width: 899px) { html { scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom)); } }
+/* Selected calendar day always wins over goal tint. */
+.cal-day.sel, .cal-day.goal-met.sel { background: var(--ink); color: var(--page); }
+.cal-day.sel .cal-val { color: var(--page); }
+/* Narrow phones: give calendar cells as much width as possible. */
+@media (max-width: 380px) {
+  .calendar, .detail-card { padding-left: var(--s2); padding-right: var(--s2); }
+  .cal-row, .cal-grid { gap: 1px; }
+}
+/* Reflow at large text sizes */
+.metric-row { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.metric-name { min-width: 0; overflow-wrap: anywhere; }
+.metric-row .sparkline { display: none !important; }
+@media (min-width: 520px) { .metric-row { grid-template-columns: auto minmax(0, 1fr) auto auto auto; } .metric-row .sparkline { display: block !important; } }
+.demo-banner { flex-wrap: wrap; }
+@media (forced-colors: active) {
+  .switch .track { border-color: ButtonText; background: Canvas; }
+  .switch .knob { background: ButtonText; forced-color-adjust: none; }
+  .switch[aria-checked="true"] .track { background: Highlight; border-color: Highlight; }
+  .switch[aria-checked="true"] .knob { background: HighlightText; }
+  .seg.on, .cal-day.sel, [aria-pressed="true"], .radio-card[aria-checked="true"] { background: Highlight; color: HighlightText; forced-color-adjust: none; }
+  .mk, .swatch, .stage-seg, .ring-fill, .mini-bar span:first-child { forced-color-adjust: none; }
+  .cal-day.goal-met { outline: 1px solid CanvasText; }
+}

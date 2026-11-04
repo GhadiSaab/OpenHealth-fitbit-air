@@ -314,7 +314,7 @@ fn PeriodView(metric: Metric, range: Range, from: NaiveDate, to: NaiveDate, show
                     <p class="muted">"For the source and method behind a single day, open its details:"</p>
                     <div class="day-chips">
                         {time::days_inclusive(from, to).filter(|d| app.summaries.with_untracked(|i| i.get(metric, *d).is_some())).map(|d| view! {
-                            <button class="chip" on:click=move |_| app.sheet.set(Some(Sheet::Provenance(metric, d)))>{d.format("%-d %b").to_string()}</button>
+                            <button class="chip" aria-haspopup="dialog" on:click=move |_| app.sheet.set(Some(Sheet::Provenance(metric, d)))>{d.format("%-d %b").to_string()}</button>
                         }).collect_view()}
                     </div>
                 })}
@@ -511,6 +511,13 @@ fn sleep_day(app: &App, ms: &Arc<Vec<Measurement>>, width: f64, show: RwSignal<b
     for s in &segs {
         *totals.entry(s.stage).or_default() += ((s.end - s.start) / MINUTE_MS) as f64;
     }
+    let sleep_summary = format!(
+        "Sleep stages from {} to {}, {} asleep: {}",
+        time::format_ts(from, &tz, "%H:%M"),
+        time::format_ts(to, &tz, "%H:%M"),
+        time::fmt_minutes(main.value),
+        STAGE_ROWS.iter().map(|(k, l)| format!("{l} {}", time::fmt_minutes(totals.get(k).copied().unwrap_or(0.0)))).collect::<Vec<_>>().join(", ")
+    );
     view! {
         <div class="sleep-head">
             <div><span class="big tabular">{time::fmt_minutes(main.value)}</span><span class="muted">" asleep"</span></div>
@@ -518,7 +525,7 @@ fn sleep_day(app: &App, ms: &Arc<Vec<Measurement>>, width: f64, show: RwSignal<b
         </div>
         {if staged {
             view! {
-                <SleepTimeline segs=segs from=from to=to labels=labels title="Sleep stages" width=width describe=describe />
+                <SleepTimeline segs=segs from=from to=to labels=labels title=sleep_summary.clone() width=width describe=describe />
                 <ul class="legend-inline" aria-label="Stage totals (calculated by Airspace from the stage intervals)">
                     {STAGE_ROWS.iter().map(|(k, l)| view! {
                         <li><span class=format!("swatch stage-{k}") aria-hidden="true"></span>{format!("{l} {}", time::fmt_minutes(totals.get(k).copied().unwrap_or(0.0)))}</li>
@@ -899,7 +906,7 @@ fn SourcesSection(metric: Metric, range: Range) -> impl IntoView {
                     {latest.map(|t| view! { <dt>"Latest measurement"</dt><dd class="tabular">{time::format_ts(t, &tz, "%a %-d %b %Y, %H:%M")}</dd> })}
                     {prov.then(|| view! { <dt>"Provisional"</dt><dd>"Some values use a live Bluetooth field mapping that hasn't been validated. They're marked with ≈ on Today."</dd> })}
                 </dl>
-                <button class="link" on:click=move |_| app.sheet.set(Some(Sheet::Provenance(metric, app.day.get_untracked())))>
+                <button class="link" aria-haspopup="dialog" on:click=move |_| app.sheet.set(Some(Sheet::Provenance(metric, app.day.get_untracked())))>
                     {move || format!("Details for {}", day_short(app.day.get()))}
                 </button>
             </Section>
@@ -921,12 +928,12 @@ fn StepsCalendar() -> impl IntoView {
         let weeks: Vec<NaiveDate> = (0..6).map(|w| first + Duration::days(7 * w)).filter(|w| w.month() == month.month() || (*w + Duration::days(6)).month() == month.month()).collect();
         view! {
             <p class="field-label">{month.format("%B %Y").to_string()}</p>
-            <div class="cal-grid steps-cal" role="grid" aria-label=format!("Steps per day in {}", month.format("%B %Y"))>
-                <div class="cal-row" role="row">
-                    {["M", "T", "W", "T", "F", "S", "S"].into_iter().map(|d| view! { <span class="cal-dow" role="columnheader">{d}</span> }).collect_view()}
+            <div class="cal-grid steps-cal" role="group" aria-label=format!("Steps per day in {}", month.format("%B %Y"))>
+                <div class="cal-row" aria-hidden="true">
+                    {["M", "T", "W", "T", "F", "S", "S"].into_iter().map(|d| view! { <span class="cal-dow">{d}</span> }).collect_view()}
                 </div>
                 {weeks.into_iter().map(|w| view! {
-                    <div class="cal-row" role="row">
+                    <div class="cal-row">
                         {(0..7).map(|i| {
                             let d = w + Duration::days(i);
                             let v = app.summaries.with(|idx| idx.value(Metric::Steps, d));
@@ -937,7 +944,7 @@ fn StepsCalendar() -> impl IntoView {
                             };
                             let txt = v.map(|v| if v >= 1000.0 { format!("{:.1}k", v / 1000.0) } else { format!("{}", v.round()) });
                             view! {
-                                <button role="gridcell" class="cal-day" class:out=!in_month class:goal-met=v.map(|v| v >= goal).unwrap_or(false)
+                                <button class="cal-day" aria-current={(d == anchor).then_some("date")} class:out=!in_month class:goal-met=v.map(|v| v >= goal).unwrap_or(false)
                                     class:sel={d == anchor} disabled={d > today} aria-label=label
                                     on:click=move |_| { app.day.set(d); app.route.set(Route::Metric(Metric::Steps, Range::Day)); }>
                                     <span class="num tabular">{d.day()}</span>

@@ -103,20 +103,27 @@ where
 #[component]
 pub fn Switch(#[prop(into)] label: String, checked: Signal<bool>, on_change: Callback<bool>, #[prop(optional)] disabled: Option<Signal<bool>>, #[prop(optional, into)] hint: Option<String>) -> impl IntoView {
     let dis = move || disabled.map(|d| d.get()).unwrap_or(false);
+    let hint_id = format!("hint-{}", label.to_lowercase().replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
+    let has_hint = hint.is_some();
     view! {
-        <div class="row switch-row">
+        // The whole row is the touch target; the switch is the single focusable control.
+        <div class="row switch-row" on:click=move |ev| {
+            let on_switch = ev.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok()).map(|e| e.closest(".switch").ok().flatten().is_some()).unwrap_or(false);
+            if !on_switch && !dis() { on_change.run(!checked.get_untracked()) }
+        }>
             <div class="row-text">
                 <span class="row-title">{label.clone()}</span>
-                {hint.map(|h| view! { <span class="row-hint">{h}</span> })}
+                {hint.map(|h| view! { <span class="row-hint" id=hint_id.clone()>{h}</span> })}
             </div>
             <button
                 role="switch"
                 class="switch"
+                aria-describedby=has_hint.then(|| hint_id.clone())
                 aria-checked=move || if checked.get() { "true" } else { "false" }
                 aria-label=label
                 disabled=dis
                 on:click=move |_| on_change.run(!checked.get_untracked())
-            ><span class="knob"></span></button>
+            ><span class="track" aria-hidden="true"><span class="knob"></span></span></button>
         </div>
     }
 }
@@ -159,11 +166,42 @@ fn origin_label(o: Origin) -> &'static str {
     }
 }
 
+thread_local! {
+    static SHEET_OPENER: std::cell::RefCell<Option<web_sys::HtmlElement>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Makes everything behind an open sheet inert (unfocusable and hidden from
+/// screen readers) and returns focus to the opener when it closes.
+fn set_background_inert(on: bool) {
+    use wasm_bindgen::JsCast;
+    let Some(doc) = crate::platform::window().document() else { return };
+    for sel in [".app", ".skip-link"] {
+        if let Ok(Some(el)) = doc.query_selector(sel) {
+            if on { let _ = el.set_attribute("inert", ""); } else { let _ = el.remove_attribute("inert"); }
+        }
+    }
+    if on {
+        let opener = doc.active_element().and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+        SHEET_OPENER.with(|o| *o.borrow_mut() = opener);
+    } else if let Some(el) = SHEET_OPENER.with(|o| o.borrow_mut().take()) {
+        if el.is_connected() {
+            let _ = el.focus();
+        }
+    }
+}
+
 /// Global sheet host (provenance and status explanations).
 #[component]
 pub fn SheetHost() -> impl IntoView {
     let app = use_app();
     let close = Callback::new(move |_| app.sheet.set(None));
+    Effect::new(move |prev: Option<bool>| {
+        let open = app.sheet.with(|s| s.is_some());
+        if prev != Some(open) && (open || prev.is_some()) {
+            set_background_inert(open);
+        }
+        open
+    });
     move || {
         app.sheet.get().map(|s| match s {
             Sheet::Provenance(metric, day) => {
@@ -272,7 +310,7 @@ pub fn ToastHost() -> impl IntoView {
     view! {
         <div class="toast-region" role="status" aria-live="polite">
             {move || app.toast.get().map(|t| view! {
-                <div class="toast" class:error=t.error>
+                <div class="toast" class:error=t.error role=t.error.then_some("alert")>
                     <Icon name=if t.error { "alert" } else { "check" } />
                     <span>{t.message}</span>
                     <button class="icon-btn small" aria-label="Dismiss" on:click=move |_| app.toast.set(None)><Icon name="close" size=18 /></button>

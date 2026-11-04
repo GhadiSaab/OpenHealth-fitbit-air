@@ -230,12 +230,12 @@ pub fn DataScreen() -> impl IntoView {
                         <p>"Measurements, summaries, journal entries and import history will be removed. This can't be undone. Export a backup first if you might need it."</p>
                         <div class="btn-row">
                             <button class="btn danger" on:click=move |_| delete()>"Delete everything"</button>
-                            <button class="btn quiet" on:click=move |_| confirm_delete.set(false)>"Cancel"</button>
+                            <button id="delete-cancel" class="btn quiet" on:click=move |_| { confirm_delete.set(false); set_timeout(|| platform::focus_by_id("delete-open"), std::time::Duration::from_millis(30)); }>"Cancel"</button>
                         </div>
                     </div>
                 }.into_any()
             } else {
-                view! { <button class="btn danger-outline" on:click=move |_| confirm_delete.set(true)><Icon name="trash" size=18 />{move || if app.db.get() == DbKind::Demo { "Delete demo data" } else { "Delete all my data" }}</button> }.into_any()
+                view! { <button id="delete-open" class="btn danger-outline" on:click=move |_| { confirm_delete.set(true); set_timeout(|| platform::focus_by_id("delete-cancel"), std::time::Duration::from_millis(30)); }><Icon name="trash" size=18 />{move || if app.db.get() == DbKind::Demo { "Delete demo data" } else { "Delete all my data" }}</button> }.into_any()
             }}
         </Section>
     }
@@ -469,6 +469,7 @@ pub fn ImportScreen() -> impl IntoView {
                 let nothing = t.new == 0 && (t.conflicts == 0 || policy.get() == ConflictPolicy::KeepExisting);
                 view! {
                     <Section title="Preview">
+                        <p class="sr-only" role="status">{format!("Preview ready: {} new records, {} already stored, {} conflicting, {} rejected.", t.new, t.duplicates, t.conflicts, errors)}</p>
                         <p class="tabular">{format!("{} · {} · {}", st.file_name, st.parsed.source_name, st.parsed.adapter)}</p>
                         {st.preview.first_day.clone().map(|a| view! { <p class="tabular">{format!("Dates: {a} to {} ({})", st.preview.last_day.clone().unwrap_or_default(), plural(st.preview.days, "day", "days"))}</p> })}
                         <p class="tabular"><strong>{format!("{} new", t.new)}</strong>{format!(" · {} already stored · {} conflicting · {} rejected · {} warnings", t.duplicates, t.conflicts, errors, warnings)}</p>

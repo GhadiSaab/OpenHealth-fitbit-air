@@ -635,7 +635,7 @@ pub fn SleepTimeline(
             })
             .collect(),
     );
-    let summary = format!("{title}. {} stage intervals. Use the arrow keys to hear each one, or open the table.", n);
+    let summary = format!("{title}. {n} stage intervals; use the arrow keys to hear each one, or open the table.");
     let sel = RwSignal::new(None::<usize>);
     let s2 = segs.clone();
     let focus = move || {

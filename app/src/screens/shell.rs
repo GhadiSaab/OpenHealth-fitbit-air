@@ -37,11 +37,14 @@ pub fn Shell() -> impl IntoView {
     });
 
     // Routing: keep the URL hash in sync so Back works (browser and Android).
-    Effect::new(move |_| {
+    Effect::new(move |prev: Option<Route>| {
         let r = app.route.get();
         // A sheet belongs to the screen that opened it.
         app.sheet.set(None);
         let h = r.to_hash();
+        if let Some(doc) = platform::window().document() {
+            doc.set_title(&r.title());
+        }
         let loc = platform::window().location();
         if loc.hash().unwrap_or_default() != h {
             let _ = loc.set_hash(&h);
@@ -49,9 +52,17 @@ pub fn Shell() -> impl IntoView {
         if r != Route::Onboarding {
             ls_set(LS_ROUTE, &h);
         }
-        platform::scroll_top();
-        // Move focus to the new screen's heading for screen-reader users.
-        set_timeout(|| platform::focus_by_id("screen-title"), std::time::Duration::from_millis(30));
+        // Switching the range of the same metric keeps your place: focus stays on
+        // the range control instead of jumping to the top of the screen.
+        let same_metric = matches!((prev, r), (Some(Route::Metric(a, _)), Route::Metric(b, _)) if a == b);
+        if same_metric {
+            set_timeout(|| platform::focus_selector(".detail-controls [role=radio][aria-checked=true]"), std::time::Duration::from_millis(30));
+        } else {
+            platform::scroll_top();
+            // Move focus to the new screen's heading for screen-reader users.
+            set_timeout(|| platform::focus_by_id("screen-title"), std::time::Duration::from_millis(30));
+        }
+        r
     });
     listen(win.as_ref(), "hashchange", move |_| {
         if let Some(r) = Route::from_hash(&platform::window().location().hash().unwrap_or_default()) {
@@ -132,10 +143,10 @@ pub fn Shell() -> impl IntoView {
     let show_tabs = move || app.ready.get() && app.route.get() != Route::Onboarding;
 
     view! {
-        <a class="skip-link" href="#main">"Skip to content"</a>
+        <a class="skip-link" href="#main" on:click=move |ev| { ev.prevent_default(); platform::focus_by_id("main"); }>"Skip to content"</a>
         <div class="app" class:with-tabs=show_tabs>
             {move || show_tabs().then(|| view! { <TabBar /> })}
-            <main id="main" class="main">
+            <main id="main" class="main" tabindex="-1">
                 {move || (!app.online.get()).then(|| view! { <div class="offline-note" role="status">"Offline. Everything except the optional AI coach works without a connection."</div> })}
                 {screen}
             </main>

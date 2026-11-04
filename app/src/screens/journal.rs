@@ -44,9 +44,9 @@ fn Calendar() -> impl IntoView {
                 <h2 class="tabular" aria-live="polite">{move || month.get().format("%B %Y").to_string()}</h2>
                 <button class="icon-btn" aria-label="Next month" disabled={move || month.get() >= time::month_start(app.today())} on:click=move |_| month.update(|m| *m = time::add_months(*m, 1))><Icon name="right" /></button>
             </div>
-            <div class="cal-grid" role="grid">
-                <div class="cal-row" role="row">
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].into_iter().map(|d| view! { <span class="cal-dow" role="columnheader" aria-label=d>{&d[..1]}</span> }).collect_view()}
+            <div class="cal-grid" role="group" aria-label=move || format!("Days in {}", month.get().format("%B %Y"))>
+                <div class="cal-row" aria-hidden="true">
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].into_iter().map(|d| view! { <span class="cal-dow">{&d[..1]}</span> }).collect_view()}
                 </div>
                 {move || {
                     let m = month.get();
@@ -55,7 +55,7 @@ fn Calendar() -> impl IntoView {
                     let goal = app.settings.with(|s| s.step_goal as f64);
                     let weeks = (0..6).map(|w| first + Duration::days(7 * w)).filter(|w| w.month() == m.month() || (*w + Duration::days(6)).month() == m.month()).collect::<Vec<_>>();
                     weeks.into_iter().map(|w| view! {
-                        <div class="cal-row" role="row">
+                        <div class="cal-row">
                             {(0..7).map(|i| {
                                 let d = w + Duration::days(i);
                                 let in_month = d.month() == m.month();
@@ -75,13 +75,12 @@ fn Calendar() -> impl IntoView {
                                 let selected = move || app.day.get() == d;
                                 view! {
                                     <button
-                                        role="gridcell"
                                         class="cal-day"
                                         class:out=!in_month
                                         class:sel=selected
                                         class:today=d == today
                                         disabled=future
-                                        aria-selected=move || if selected() { "true" } else { "false" }
+                                        aria-current=move || selected().then_some("date")
                                         aria-label=label
                                         on:click=move |_| app.day.set(d)
                                     >
@@ -124,6 +123,7 @@ fn DayEditor() -> impl IntoView {
         let e = app.journal.with_untracked(|j| j.iter().find(|e| e.day == time::day_key(d)).cloned()).unwrap_or_else(|| JournalEntry::new(d, platform::now_ms()));
         draft.set(e);
         dirty.set(false);
+        app.journal_draft.set(None);
     });
     let all_tags = move || {
         let mut t: Vec<String> = SUGGESTED_TAGS.iter().map(|s| s.to_string()).collect();
@@ -139,21 +139,40 @@ fn DayEditor() -> impl IntoView {
         }
         t
     };
+    // Tolerates running after the editor is disposed (e.g. blur during navigation).
     let save = move || {
-        saving.set(true);
-        let e = draft.get_untracked();
+        let Some(e) = draft.try_get_untracked() else { return };
+        let _ = saving.try_set(true);
+        app.journal_draft.set(None);
         spawn_local(async move {
             match app.save_journal(e).await {
                 Ok(()) => {
-                    dirty.set(false);
+                    let _ = dirty.try_set(false);
                     app.haptic();
                     app.notify("Journal saved");
                 }
                 Err(err) => app.error(format!("Couldn't save: {err}")),
             }
-            saving.set(false);
+            let _ = saving.try_set(false);
         });
     };
+    // Keep the app-level draft in step so unsaved text survives leaving the screen.
+    Effect::new(move |_| {
+        let d = draft.get();
+        if dirty.get() {
+            app.journal_draft.set(Some(d));
+        }
+    });
+    on_cleanup(move || {
+        if let Some(d) = app.journal_draft.get_untracked() {
+            app.journal_draft.set(None);
+            spawn_local(async move {
+                if app.save_journal(d).await.is_ok() {
+                    app.notify("Journal saved");
+                }
+            });
+        }
+    });
     let add_custom = move || {
         if let Some(t) = normalize_tag(&custom.get_untracked()) {
             draft.update(|d| if !d.tags.contains(&t) { d.tags.push(t) });
@@ -173,7 +192,7 @@ fn DayEditor() -> impl IntoView {
                     placeholder="How was the day? Anything worth remembering?"
                     prop:value=move || draft.with(|d| d.note.clone())
                     on:input=move |ev| { draft.update(|d| d.note = event_target_value(&ev)); dirty.set(true); }
-                    on:blur=move |_| if dirty.get_untracked() { save() }
+                    on:blur=move |_| { if dirty.try_get_untracked().unwrap_or(false) { save() } }
                 ></textarea>
             </label>
             <fieldset class="tags">

@@ -86,6 +86,26 @@ impl Route {
             _ => None,
         }
     }
+    /// Document title for the screen (announced by screen readers on navigation).
+    pub fn title(self) -> String {
+        let t = match self {
+            Route::Onboarding => "Welcome".to_string(),
+            Route::Today => "Today".into(),
+            Route::Explore => "Explore".into(),
+            Route::Metric(m, _) => airspace_core::catalog::info(m).title.to_string(),
+            Route::Journal => "Journal".into(),
+            Route::Coach => "Coach".into(),
+            Route::Profile => "Profile & device".into(),
+            Route::Device => "Device".into(),
+            Route::Data => "Data".into(),
+            Route::Import => "Import history".into(),
+            Route::Settings => "Settings".into(),
+            Route::AiSettings => "AI provider".into(),
+            Route::About => "About".into(),
+        };
+        format!("{t} · Airspace")
+    }
+
     pub fn to_hash(self) -> String {
         match self {
             Route::Onboarding => "#/welcome".into(),
@@ -170,6 +190,9 @@ pub struct App {
     pub last_ai_context: RwSignal<Option<String>>,
     /// Viewport width in CSS px (for chart sizing).
     pub vw: RwSignal<f64>,
+    /// Unsaved journal edits. Lives at app level so leaving the screen
+    /// (tab switch, Back) can still save them after the editor is gone.
+    pub journal_draft: RwSignal<Option<JournalEntry>>,
 }
 
 pub const LS_SETTINGS: &str = "airspace.settings.v1";
@@ -213,6 +236,7 @@ impl App {
             measurement_count: RwSignal::new(0),
             last_ai_context: RwSignal::new(None),
             vw: RwSignal::new(platform::window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(390.0)),
+            journal_draft: RwSignal::new(None),
         }
     }
 

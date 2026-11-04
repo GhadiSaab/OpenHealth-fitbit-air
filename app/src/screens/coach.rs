@@ -383,7 +383,19 @@ pub fn AiSettings() -> impl IntoView {
                 {[(AiProviderKind::Anthropic, "Uses the Anthropic Messages API (documented adapter)."), (AiProviderKind::OpenAiCompatible, "For services implementing the OpenAI chat-completions format. Compatibility varies by service.")].into_iter().map(|(p, d)| {
                     let on = move || provider.get() == p;
                     view! {
-                        <button role="radio" class="radio-card" aria-checked=move || if on() { "true" } else { "false" } on:click=move |_| {
+                        <button role="radio" class="radio-card" aria-checked=move || if on() { "true" } else { "false" } tabindex=move || if on() { "0" } else { "-1" }
+                            on:keydown=move |ev: leptos::ev::KeyboardEvent| {
+                                if matches!(ev.key().as_str(), "ArrowDown" | "ArrowUp" | "ArrowLeft" | "ArrowRight") {
+                                    ev.prevent_default();
+                                    let next = if provider.get_untracked() == AiProviderKind::Anthropic { AiProviderKind::OpenAiCompatible } else { AiProviderKind::Anthropic };
+                                    provider.set(next);
+                                    let def = AiConfig::default_for(next);
+                                    endpoint.set(def.endpoint);
+                                    model.set(def.model);
+                                    set_timeout(|| platform::focus_selector(".radio-card[aria-checked=true]"), std::time::Duration::from_millis(20));
+                                }
+                            }
+                            on:click=move |_| {
                             if provider.get_untracked() != p {
                                 provider.set(p);
                                 let def = AiConfig::default_for(p);
