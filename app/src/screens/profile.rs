@@ -456,13 +456,11 @@ pub fn ImportScreen() -> impl IntoView {
             ver.get();
             staged.with_value(|s| s.clone()).map(|st| {
                 let t = st.preview.totals();
-                let tz = app.tz_untracked();
                 let rows: Vec<Vec<String>> = st.preview.per_metric.iter().map(|(m, c)| vec![
                     catalog::info(*m).title.to_string(),
                     c.new.to_string(),
                     c.duplicates.to_string(),
                     c.conflicts.to_string(),
-                    match (c.first, c.last) { (Some(a), Some(b)) => format!("{} – {}", time::format_ts(a, &tz, "%-d %b %Y"), time::format_ts(b, &tz, "%-d %b %Y")), _ => String::new() },
                 ]).collect();
                 let errors = st.parsed.errors();
                 let warnings = st.parsed.warnings();
@@ -474,7 +472,7 @@ pub fn ImportScreen() -> impl IntoView {
                         <p class="tabular">{format!("{} · {} · {}", st.file_name, st.parsed.source_name, st.parsed.adapter)}</p>
                         {st.preview.first_day.clone().map(|a| view! { <p class="tabular">{format!("Dates: {a} to {} ({})", st.preview.last_day.clone().unwrap_or_default(), plural(st.preview.days, "day", "days"))}</p> })}
                         <p class="tabular"><strong>{format!("{} new", t.new)}</strong>{format!(" · {} already stored · {} conflicting · {} rejected · {} warnings", t.duplicates, t.conflicts, errors, warnings)}</p>
-                        {(!rows.is_empty()).then(|| view! { <DataTable caption="Records by metric" headers=vec!["Metric", "New", "Duplicates", "Conflicts", "Dates"] rows=rows /> })}
+                        {(!rows.is_empty()).then(|| view! { <DataTable caption="Records by metric" headers=vec!["Metric", "New", "Duplicates", "Conflicts"] rows=rows /> })}
                         {(!st.parsed.journal.is_empty()).then(|| view! { <p>{format!("{} — added only for days without an existing entry.", plural(st.parsed.journal.len(), "journal entry", "journal entries"))}</p> })}
                         {(t.conflicts > 0).then(|| view! {
                             <fieldset class="policy">

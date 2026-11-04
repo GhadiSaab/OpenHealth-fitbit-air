@@ -1,0 +1,2018 @@
+{
+ "schema": "airspace.import",
+ "version": 1,
+ "source": {
+  "name": "Sample export",
+  "device": "Fitbit Air"
+ },
+ "timezone": "Europe/Paris",
+ "records": [
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T07:00:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T07:15:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T07:30:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T07:45:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T08:00:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T08:15:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T08:30:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T08:45:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T09:00:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T09:15:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T09:30:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T09:45:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T10:00:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T10:15:00+02:00",
+   "value": 91
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T10:30:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T10:45:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T11:00:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T11:15:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T11:30:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T11:45:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T12:00:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T12:15:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T12:30:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T12:45:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T13:00:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T13:15:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T13:30:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T13:45:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T14:00:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T14:15:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T14:30:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T14:45:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T15:00:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T15:15:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T15:30:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T15:45:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T16:00:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T16:15:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T16:30:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T16:45:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T17:00:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T17:15:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T17:30:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T17:45:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T18:00:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T18:15:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T18:30:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T18:45:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T19:00:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T19:15:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T19:30:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T19:45:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T20:00:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T20:15:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T20:30:00+02:00",
+   "value": 83
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T20:45:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T21:00:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T21:15:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T21:30:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-20T21:45:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "steps",
+   "kind": "daily_total",
+   "day": "2026-10-20",
+   "value": 6539
+  },
+  {
+   "metric": "distance",
+   "kind": "daily_total",
+   "day": "2026-10-20",
+   "value": 5.25,
+   "unit": "km"
+  },
+  {
+   "metric": "calories",
+   "kind": "daily_total",
+   "day": "2026-10-20",
+   "value": 2460,
+   "scope": "total"
+  },
+  {
+   "metric": "resting_heart_rate",
+   "time": "2026-10-20T07:00:00+02:00",
+   "value": 59
+  },
+  {
+   "metric": "hrv",
+   "time": "2026-10-20T07:00:00+02:00",
+   "value": 37,
+   "method": "rmssd"
+  },
+  {
+   "metric": "spo2",
+   "time": "2026-10-20T07:00:00+02:00",
+   "value": 95.9,
+   "min": 92,
+   "max": 99
+  },
+  {
+   "metric": "skin_temperature",
+   "time": "2026-10-20T07:00:00+02:00",
+   "value": 0.1,
+   "unit": "delta_c"
+  },
+  {
+   "metric": "respiratory_rate",
+   "time": "2026-10-20T07:00:00+02:00",
+   "value": 14.5
+  },
+  {
+   "metric": "sleep",
+   "start": "2026-10-19T23:20:00+02:00",
+   "end": "2026-10-20T07:00:00+02:00",
+   "asleep_minutes": 434,
+   "stages": [
+    {
+     "stage": "light",
+     "start": "2026-10-19T23:30:00+02:00",
+     "end": "2026-10-20T01:10:00+02:00"
+    },
+    {
+     "stage": "deep",
+     "start": "2026-10-20T01:10:00+02:00",
+     "end": "2026-10-20T02:20:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-20T02:20:00+02:00",
+     "end": "2026-10-20T03:30:00+02:00"
+    },
+    {
+     "stage": "light",
+     "start": "2026-10-20T03:30:00+02:00",
+     "end": "2026-10-20T06:10:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-20T06:10:00+02:00",
+     "end": "2026-10-20T06:50:00+02:00"
+    },
+    {
+     "stage": "awake",
+     "start": "2026-10-20T06:50:00+02:00",
+     "end": "2026-10-20T07:00:00+02:00"
+    }
+   ]
+  },
+  {
+   "metric": "heart_rate_zones",
+   "kind": "daily_total",
+   "day": "2026-10-20",
+   "zone": "cardio",
+   "value": 13,
+   "lower_bpm": 123,
+   "upper_bpm": 150
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T07:00:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T07:15:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T07:30:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T07:45:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T08:00:00+02:00",
+   "value": 91
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T08:15:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T08:30:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T08:45:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T09:00:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T09:15:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T09:30:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T09:45:00+02:00",
+   "value": 84
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T10:00:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T10:15:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T10:30:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T10:45:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T11:00:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T11:15:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T11:30:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T11:45:00+02:00",
+   "value": 90
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T12:00:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T12:15:00+02:00",
+   "value": 85
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T12:30:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T12:45:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T13:00:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T13:15:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T13:30:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T13:45:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T14:00:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T14:15:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T14:30:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T14:45:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T15:00:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T15:15:00+02:00",
+   "value": 91
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T15:30:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T15:45:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T16:00:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T16:15:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T16:30:00+02:00",
+   "value": 83
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T16:45:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T17:00:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T17:15:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T17:30:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T17:45:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T18:00:00+02:00",
+   "value": 90
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T18:15:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T18:30:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T18:45:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T19:00:00+02:00",
+   "value": 84
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T19:15:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T19:30:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T19:45:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T20:00:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T20:15:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T20:30:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T20:45:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T21:00:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T21:15:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T21:30:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-21T21:45:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "steps",
+   "kind": "daily_total",
+   "day": "2026-10-21",
+   "value": 8883
+  },
+  {
+   "metric": "distance",
+   "kind": "daily_total",
+   "day": "2026-10-21",
+   "value": 6.78,
+   "unit": "km"
+  },
+  {
+   "metric": "calories",
+   "kind": "daily_total",
+   "day": "2026-10-21",
+   "value": 1966,
+   "scope": "total"
+  },
+  {
+   "metric": "resting_heart_rate",
+   "time": "2026-10-21T07:00:00+02:00",
+   "value": 54
+  },
+  {
+   "metric": "hrv",
+   "time": "2026-10-21T07:00:00+02:00",
+   "value": 47,
+   "method": "rmssd"
+  },
+  {
+   "metric": "spo2",
+   "time": "2026-10-21T07:00:00+02:00",
+   "value": 96.3,
+   "min": 92,
+   "max": 99
+  },
+  {
+   "metric": "skin_temperature",
+   "time": "2026-10-21T07:00:00+02:00",
+   "value": 0.1,
+   "unit": "delta_c"
+  },
+  {
+   "metric": "respiratory_rate",
+   "time": "2026-10-21T07:00:00+02:00",
+   "value": 15.2
+  },
+  {
+   "metric": "sleep",
+   "start": "2026-10-20T23:20:00+02:00",
+   "end": "2026-10-21T07:00:00+02:00",
+   "asleep_minutes": 428,
+   "stages": [
+    {
+     "stage": "light",
+     "start": "2026-10-20T23:30:00+02:00",
+     "end": "2026-10-21T01:10:00+02:00"
+    },
+    {
+     "stage": "deep",
+     "start": "2026-10-21T01:10:00+02:00",
+     "end": "2026-10-21T02:20:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-21T02:20:00+02:00",
+     "end": "2026-10-21T03:30:00+02:00"
+    },
+    {
+     "stage": "light",
+     "start": "2026-10-21T03:30:00+02:00",
+     "end": "2026-10-21T06:10:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-21T06:10:00+02:00",
+     "end": "2026-10-21T06:50:00+02:00"
+    },
+    {
+     "stage": "awake",
+     "start": "2026-10-21T06:50:00+02:00",
+     "end": "2026-10-21T07:00:00+02:00"
+    }
+   ]
+  },
+  {
+   "metric": "heart_rate_zones",
+   "kind": "daily_total",
+   "day": "2026-10-21",
+   "zone": "cardio",
+   "value": 9,
+   "lower_bpm": 123,
+   "upper_bpm": 150
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T07:00:00+02:00",
+   "value": 84
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T07:15:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T07:30:00+02:00",
+   "value": 90
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T07:45:00+02:00",
+   "value": 83
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T08:00:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T08:15:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T08:30:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T08:45:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T09:00:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T09:15:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T09:30:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T09:45:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T10:00:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T10:15:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T10:30:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T10:45:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T11:00:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T11:15:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T11:30:00+02:00",
+   "value": 85
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T11:45:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T12:00:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T12:15:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T12:30:00+02:00",
+   "value": 91
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T12:45:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T13:00:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T13:15:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T13:30:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T13:45:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T14:00:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T14:15:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T14:30:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T14:45:00+02:00",
+   "value": 90
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T15:00:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T15:15:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T15:30:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T15:45:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T16:00:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T16:15:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T16:30:00+02:00",
+   "value": 84
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T16:45:00+02:00",
+   "value": 75
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T17:00:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T17:15:00+02:00",
+   "value": 83
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T17:30:00+02:00",
+   "value": 90
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T17:45:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T18:00:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T18:15:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T18:30:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T18:45:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T19:00:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T19:15:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T19:30:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T19:45:00+02:00",
+   "value": 83
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T20:00:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T20:15:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T20:30:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T20:45:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T21:00:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T21:15:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T21:30:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T21:45:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "steps",
+   "kind": "daily_total",
+   "day": "2026-10-22",
+   "value": 5033
+  },
+  {
+   "metric": "distance",
+   "kind": "daily_total",
+   "day": "2026-10-22",
+   "value": 4.18,
+   "unit": "km"
+  },
+  {
+   "metric": "calories",
+   "kind": "daily_total",
+   "day": "2026-10-22",
+   "value": 2447,
+   "scope": "total"
+  },
+  {
+   "metric": "resting_heart_rate",
+   "time": "2026-10-22T07:00:00+02:00",
+   "value": 56
+  },
+  {
+   "metric": "hrv",
+   "time": "2026-10-22T07:00:00+02:00",
+   "value": 45,
+   "method": "rmssd"
+  },
+  {
+   "metric": "spo2",
+   "time": "2026-10-22T07:00:00+02:00",
+   "value": 95.9,
+   "min": 92,
+   "max": 99
+  },
+  {
+   "metric": "skin_temperature",
+   "time": "2026-10-22T07:00:00+02:00",
+   "value": 0.4,
+   "unit": "delta_c"
+  },
+  {
+   "metric": "respiratory_rate",
+   "time": "2026-10-22T07:00:00+02:00",
+   "value": 14.8
+  },
+  {
+   "metric": "sleep",
+   "start": "2026-10-21T23:20:00+02:00",
+   "end": "2026-10-22T07:00:00+02:00",
+   "asleep_minutes": 432,
+   "stages": [
+    {
+     "stage": "light",
+     "start": "2026-10-21T23:30:00+02:00",
+     "end": "2026-10-22T01:10:00+02:00"
+    },
+    {
+     "stage": "deep",
+     "start": "2026-10-22T01:10:00+02:00",
+     "end": "2026-10-22T02:20:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-22T02:20:00+02:00",
+     "end": "2026-10-22T03:30:00+02:00"
+    },
+    {
+     "stage": "light",
+     "start": "2026-10-22T03:30:00+02:00",
+     "end": "2026-10-22T06:10:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-22T06:10:00+02:00",
+     "end": "2026-10-22T06:50:00+02:00"
+    },
+    {
+     "stage": "awake",
+     "start": "2026-10-22T06:50:00+02:00",
+     "end": "2026-10-22T07:00:00+02:00"
+    }
+   ]
+  },
+  {
+   "metric": "heart_rate_zones",
+   "kind": "daily_total",
+   "day": "2026-10-22",
+   "zone": "cardio",
+   "value": 19,
+   "lower_bpm": 123,
+   "upper_bpm": 150
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T07:00:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T07:15:00+02:00",
+   "value": 83
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T07:30:00+02:00",
+   "value": 85
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T07:45:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T08:00:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T08:15:00+02:00",
+   "value": 90
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T08:30:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T08:45:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T09:00:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T09:15:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T09:30:00+02:00",
+   "value": 83
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T09:45:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T10:00:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T10:15:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T10:30:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T10:45:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T11:00:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T11:15:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T11:30:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T11:45:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T12:00:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T12:15:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T12:30:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T12:45:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T13:00:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T13:15:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T13:30:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T13:45:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T14:00:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T14:15:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T14:30:00+02:00",
+   "value": 63
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T14:45:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T15:00:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T15:15:00+02:00",
+   "value": 80
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T15:30:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T15:45:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T16:00:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T16:15:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T16:30:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T16:45:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T17:00:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T17:15:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T17:30:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T17:45:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T18:00:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T18:15:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T18:30:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T18:45:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T19:00:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T19:15:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T19:30:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T19:45:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T20:00:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T20:15:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T20:30:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T20:45:00+02:00",
+   "value": 65
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T21:00:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T21:15:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T21:30:00+02:00",
+   "value": 76
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-23T21:45:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "steps",
+   "kind": "daily_total",
+   "day": "2026-10-23",
+   "value": 8963
+  },
+  {
+   "metric": "distance",
+   "kind": "daily_total",
+   "day": "2026-10-23",
+   "value": 4.97,
+   "unit": "km"
+  },
+  {
+   "metric": "calories",
+   "kind": "daily_total",
+   "day": "2026-10-23",
+   "value": 2047,
+   "scope": "total"
+  },
+  {
+   "metric": "resting_heart_rate",
+   "time": "2026-10-23T07:00:00+02:00",
+   "value": 54
+  },
+  {
+   "metric": "hrv",
+   "time": "2026-10-23T07:00:00+02:00",
+   "value": 47,
+   "method": "rmssd"
+  },
+  {
+   "metric": "spo2",
+   "time": "2026-10-23T07:00:00+02:00",
+   "value": 95.4,
+   "min": 92,
+   "max": 99
+  },
+  {
+   "metric": "skin_temperature",
+   "time": "2026-10-23T07:00:00+02:00",
+   "value": -0.2,
+   "unit": "delta_c"
+  },
+  {
+   "metric": "respiratory_rate",
+   "time": "2026-10-23T07:00:00+02:00",
+   "value": 15.0
+  },
+  {
+   "metric": "sleep",
+   "start": "2026-10-22T23:20:00+02:00",
+   "end": "2026-10-23T07:00:00+02:00",
+   "asleep_minutes": 410,
+   "stages": [
+    {
+     "stage": "light",
+     "start": "2026-10-22T23:30:00+02:00",
+     "end": "2026-10-23T01:10:00+02:00"
+    },
+    {
+     "stage": "deep",
+     "start": "2026-10-23T01:10:00+02:00",
+     "end": "2026-10-23T02:20:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-23T02:20:00+02:00",
+     "end": "2026-10-23T03:30:00+02:00"
+    },
+    {
+     "stage": "light",
+     "start": "2026-10-23T03:30:00+02:00",
+     "end": "2026-10-23T06:10:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-23T06:10:00+02:00",
+     "end": "2026-10-23T06:50:00+02:00"
+    },
+    {
+     "stage": "awake",
+     "start": "2026-10-23T06:50:00+02:00",
+     "end": "2026-10-23T07:00:00+02:00"
+    }
+   ]
+  },
+  {
+   "metric": "heart_rate_zones",
+   "kind": "daily_total",
+   "day": "2026-10-23",
+   "zone": "cardio",
+   "value": 16,
+   "lower_bpm": 123,
+   "upper_bpm": 150
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T07:00:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T07:15:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T07:30:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T07:45:00+02:00",
+   "value": 92
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T08:00:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T08:15:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T08:30:00+02:00",
+   "value": 66
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T08:45:00+02:00",
+   "value": 84
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T09:00:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T09:15:00+02:00",
+   "value": 91
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T09:30:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T09:45:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T10:00:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T10:15:00+02:00",
+   "value": 71
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T10:30:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T10:45:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T11:00:00+02:00",
+   "value": 64
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T11:15:00+02:00",
+   "value": 84
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T11:30:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T11:45:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T12:00:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T12:15:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T12:30:00+02:00",
+   "value": 91
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T12:45:00+02:00",
+   "value": 67
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T13:00:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T13:15:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T13:30:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T13:45:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T14:00:00+02:00",
+   "value": 79
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T14:15:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T14:30:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T14:45:00+02:00",
+   "value": 72
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T15:00:00+02:00",
+   "value": 82
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T15:15:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T15:30:00+02:00",
+   "value": 81
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T15:45:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T16:00:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T16:15:00+02:00",
+   "value": 86
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T16:30:00+02:00",
+   "value": 89
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T16:45:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T17:00:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T17:15:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T17:30:00+02:00",
+   "value": 88
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T17:45:00+02:00",
+   "value": 74
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T18:00:00+02:00",
+   "value": 85
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T18:15:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T18:30:00+02:00",
+   "value": 69
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T18:45:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T19:00:00+02:00",
+   "value": 78
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T19:15:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T19:30:00+02:00",
+   "value": 73
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T19:45:00+02:00",
+   "value": 85
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T20:00:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T20:15:00+02:00",
+   "value": 62
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T20:30:00+02:00",
+   "value": 87
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T20:45:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T21:00:00+02:00",
+   "value": 77
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T21:15:00+02:00",
+   "value": 70
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T21:30:00+02:00",
+   "value": 68
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-24T21:45:00+02:00",
+   "value": 84
+  },
+  {
+   "metric": "steps",
+   "kind": "daily_total",
+   "day": "2026-10-24",
+   "value": 9957
+  },
+  {
+   "metric": "distance",
+   "kind": "daily_total",
+   "day": "2026-10-24",
+   "value": 8.0,
+   "unit": "km"
+  },
+  {
+   "metric": "calories",
+   "kind": "daily_total",
+   "day": "2026-10-24",
+   "value": 2357,
+   "scope": "total"
+  },
+  {
+   "metric": "resting_heart_rate",
+   "time": "2026-10-24T07:00:00+02:00",
+   "value": 60
+  },
+  {
+   "metric": "hrv",
+   "time": "2026-10-24T07:00:00+02:00",
+   "value": 50,
+   "method": "rmssd"
+  },
+  {
+   "metric": "spo2",
+   "time": "2026-10-24T07:00:00+02:00",
+   "value": 96.3,
+   "min": 92,
+   "max": 99
+  },
+  {
+   "metric": "skin_temperature",
+   "time": "2026-10-24T07:00:00+02:00",
+   "value": -0.1,
+   "unit": "delta_c"
+  },
+  {
+   "metric": "respiratory_rate",
+   "time": "2026-10-24T07:00:00+02:00",
+   "value": 15.2
+  },
+  {
+   "metric": "sleep",
+   "start": "2026-10-23T23:20:00+02:00",
+   "end": "2026-10-24T07:00:00+02:00",
+   "asleep_minutes": 405,
+   "stages": [
+    {
+     "stage": "light",
+     "start": "2026-10-23T23:30:00+02:00",
+     "end": "2026-10-24T01:10:00+02:00"
+    },
+    {
+     "stage": "deep",
+     "start": "2026-10-24T01:10:00+02:00",
+     "end": "2026-10-24T02:20:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-24T02:20:00+02:00",
+     "end": "2026-10-24T03:30:00+02:00"
+    },
+    {
+     "stage": "light",
+     "start": "2026-10-24T03:30:00+02:00",
+     "end": "2026-10-24T06:10:00+02:00"
+    },
+    {
+     "stage": "rem",
+     "start": "2026-10-24T06:10:00+02:00",
+     "end": "2026-10-24T06:50:00+02:00"
+    },
+    {
+     "stage": "awake",
+     "start": "2026-10-24T06:50:00+02:00",
+     "end": "2026-10-24T07:00:00+02:00"
+    }
+   ]
+  },
+  {
+   "metric": "heart_rate_zones",
+   "kind": "daily_total",
+   "day": "2026-10-24",
+   "zone": "cardio",
+   "value": 7,
+   "lower_bpm": 123,
+   "upper_bpm": 150
+  },
+  {
+   "metric": "heart_rate",
+   "time": "2026-10-22T12:00:00+02:00",
+   "value": 420
+  },
+  {
+   "metric": "skin_temperature",
+   "time": "2026-10-22T07:00:00+02:00",
+   "value": 36.4,
+   "unit": "\u00b0C"
+  }
+ ],
+ "journal": [
+  {
+   "day": "2026-10-21",
+   "note": "Long walk after work.",
+   "tags": [
+    "exercise"
+   ]
+  },
+  {
+   "day": "2026-10-23",
+   "tags": [
+    "caffeine",
+    "stress"
+   ]
+  }
+ ]
+}

@@ -103,10 +103,43 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   check(await page.locator('.insight').count() > 0, 'local insights render without AI');
   await shot('10-coach');
 
-  // Data screen.
+  // AI key entered in the browser stays in memory and never reaches a backup.
+  const SECRET = 'sk-ant-test-SECRET-123456';
+  await page.goto(base + '#/coach/settings');
+  await page.getByPlaceholder('Paste your key').fill(SECRET);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByText('Saved.').waitFor();
+  check(await page.evaluate((s) => JSON.stringify(localStorage).includes(s), SECRET) === false, 'API key is not written to localStorage');
+
+  // Data screen: export a backup and check its contents.
   await page.goto(base + '#/profile/data');
   await page.getByRole('heading', { name: 'Data', exact: true }).waitFor();
   await shot('11-data');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Export full backup/ }).click()]);
+  const backup = fs.readFileSync(await dl.path(), 'utf8');
+  const parsed = JSON.parse(backup);
+  check(parsed.format === 'airspace.backup' && parsed.version === 1 && parsed.measurements.length > 1000, 'backup export is versioned and complete');
+  check(!backup.includes(SECRET) && !/api_?key/i.test(backup), 'backup contains no API key');
+
+  // Import into personal data (switches away from the demo automatically).
+  const sample = path.join(__dirname, '..', 'examples', 'sample-import.json');
+  await page.goto(base + '#/profile/data/import');
+  await page.getByRole('heading', { name: 'Import history', exact: true }).waitFor();
+  await page.locator('input[type=file]').setInputFiles(sample);
+  await page.getByRole('heading', { name: 'Preview' }).waitFor({ timeout: 20000 });
+  check(await page.getByText(/2 rejected/).count() > 0, 'preview reports rejected records (implausible HR, absolute temperature)');
+  await shot('12-import-preview');
+  await page.getByRole('button', { name: /^Import \d+ records/ }).click();
+  await page.getByText(/Imported \d+ records/).waitFor({ timeout: 30000 });
+  check(await page.getByText(/Demo data\./).count() === 0, 'personal data shows no demo banner');
+  // Re-importing the same file finds only duplicates.
+  await page.goto(base + '#/profile/data/import');
+  await page.locator('input[type=file]').setInputFiles(sample);
+  await page.getByRole('heading', { name: 'Preview' }).waitFor({ timeout: 20000 });
+  check(await page.getByRole('button', { name: 'Nothing new to import' }).count() === 1, 're-import is detected as duplicates');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.goto(base + '#/explore/steps/w');
+  await page.getByText(/Oct|Nov/).first().waitFor();
 
   // Dark theme.
   await page.goto(base + '#/profile/settings');
@@ -114,11 +147,11 @@ function check(cond, msg) { if (!cond) { throw new Error('FAIL: ' + msg); } cons
   await page.goto(base + '#/today');
   await page.getByText(/Steps/).first().waitFor();
   check(await page.evaluate(() => document.documentElement.dataset.theme) === 'dark', 'dark theme applies');
-  await shot('12-today-dark');
+  await shot('13-today-dark');
 
   // Desktop layout.
   await page.setViewportSize({ width: 1280, height: 900 });
-  await shot('13-desktop-dark');
+  await shot('14-desktop-dark');
 
   const bad = errors.filter((e) => !/favicon/.test(e));
   check(bad.length === 0, 'no console errors' + (bad.length ? ': ' + bad.join(' | ') : ''));

@@ -1,0 +1,49 @@
+name: Android APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Debug APK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Android NDK
+        run: |
+          sdkmanager --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,aarch64-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install build tools
+        run: cargo binstall -y --locked trunk@0.22.1 wasm-bindgen-cli@0.2.130 tauri-cli@2.12.4
+      - name: Build the WebAssembly UI
+        working-directory: app
+        run: trunk build --release
+      - name: Generate and configure the Android project
+        run: scripts/android-prepare.sh
+      - name: Build debug APK
+        working-directory: src-tauri
+        run: cargo tauri android build --debug --apk --target aarch64 x86_64
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp {} out/ \;
+          ls -la out
+          (cd out && sha256sum *.apk | tee SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: airspace-debug-apk
+          path: out/

@@ -688,9 +688,6 @@ pub fn Ring(fraction: f64, tone: &'static str, #[prop(optional)] size: Option<f6
                 stroke-dasharray=format!("{:.2} {:.2}", c * f, c)
                 transform=format!("rotate(-90 {} {})", s / 2.0, s / 2.0)
             />
-            {(fraction > 1.0).then(|| view! {
-                <circle cx=format!("{}", s / 2.0) cy=format!("{}", stroke / 2.0) r="3" class="ring-cap" />
-            })}
         </svg>
     }
 }

@@ -1,0 +1,5 @@
+metric,kind,time,start,end,day,value,unit,method,scope
+resting_heart_rate,,2026-10-25T07:00:00+02:00,,,,56,bpm,,
+steps,daily_total,,,,2026-10-25,8450,,,
+hrv,,2026-10-25T07:00:00+02:00,,,,44,ms,rmssd,
+calories,daily_total,,,,2026-10-25,2210,kcal,,total
