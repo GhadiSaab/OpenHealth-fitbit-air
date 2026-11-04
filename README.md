@@ -78,8 +78,9 @@ No feature pretends to work: unavailable adapters say what is missing.
 * **The Android APK was not built or verified in this environment**, because the sandbox's network policy blocks the
   Android SDK download host.
   * The Android Studio project is committed in `src-tauri/gen/android`.
-  * The Rust side of the Keystore plugin type-checks for `aarch64-linux-android`.
-  * Reminders, haptics and the Kotlin vault have not been compiled or run on a device.
+  * All Android-only Rust code type-checks for `aarch64-linux-android` with no errors or warnings, including reminders,
+    the Keystore vault plugin and the mobile entry point. `scripts/android-typecheck.sh` does this without the NDK.
+  * Not built here: the Kotlin `VaultPlugin`, the Gradle project, and the APK itself. Nothing has run on a device.
   * `ci/github-workflows/android.yml` builds the debug APK on GitHub's runners; see below.
 
 ## Build and run
