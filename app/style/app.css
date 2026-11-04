@@ -524,7 +524,7 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 /* Values never break mid-number; long ones shrink a little on narrow phones. */
 .tile:not(.hero) { container-type: inline-size; }
 /* Sized to the tile itself (not the screen), so values fit 2- or 3-up layouts. */
-.tile-value { font-size: clamp(1.125rem, 15cqi, 2rem); max-width: 100%; }
+.tile-value { font-size: clamp(1.5rem, 19cqi, 2rem); max-width: 100%; }
 .tile, .hero-text, .insight, .insight-head h3, .metric-row > * { min-width: 0; }
 /* Large text (Android font scaling, browser zoom): tiles drop to one column
    instead of clipping values. rem tracks the user's text size. */
