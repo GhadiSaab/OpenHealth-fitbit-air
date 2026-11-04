@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["crates/airspace-core", "crates/tauri-plugin-vault", "app", "src-tauri"]
+# `cargo test` at the root runs the platform-independent core only.
+default-members = ["crates/airspace-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.90"
+
+[workspace.dependencies]
+airspace-core = { path = "crates/airspace-core" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+chrono = { version = "0.4.42", default-features = false, features = ["std", "clock", "serde"] }
+chrono-tz = { version = "0.10.4", features = ["serde"] }
+thiserror = "2.0.17"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.release.package.airspace-core]
+opt-level = 3
