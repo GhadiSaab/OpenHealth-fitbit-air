@@ -7,7 +7,7 @@ use crate::ui::format::plural;
 use crate::ui::icons::Icon;
 use crate::ui::widgets::{DemoBanner, Header, Section, Segmented, Switch, use_app};
 use airspace_core::backup;
-use airspace_core::bluetooth::{ConnectionState, LiveProvider, NotConnectedLive, Support, live_capabilities};
+use airspace_core::bluetooth::{ConnectionState, Support, live_capabilities};
 use airspace_core::catalog;
 use airspace_core::dedupe::{ConflictPolicy, plan_merge};
 use airspace_core::import::{self, ImportContext, ImportPreview, ParsedImport, Severity};
@@ -62,7 +62,7 @@ fn DeviceCard() -> impl IntoView {
             _ => view! {
                 <div class="device-card">
                     <span class="status-dot off" aria-hidden="true"></span>
-                    <div><p class="row-title">"Fitbit Air"</p><p class="row-hint">"Not connected · Bluetooth recording isn't in this version"</p></div>
+                    <div><p class="row-title">"Fitbit Air"</p><p class="row-hint">{move || app.live_text()}</p></div>
                 </div>
             }.into_any(),
         }
@@ -72,31 +72,54 @@ fn DeviceCard() -> impl IntoView {
 #[component]
 pub fn Device() -> impl IntoView {
     let app = use_app();
-    let provider = NotConnectedLive;
-    let state = provider.state();
-    let reason = match &state {
-        ConnectionState::Unavailable { reason } => reason.clone(),
-        _ => String::new(),
-    };
     let previews: Vec<(ConnectionState, &str)> = vec![
-        (ConnectionState::PermissionDenied { can_ask_again: true }, "Airspace needs the Nearby devices permission to talk to your tracker. You'll be asked once, with an explanation."),
-        (ConnectionState::BluetoothOff, "Turn on Bluetooth to record. History stays available."),
-        (ConnectionState::OutOfRange { since: 0 }, "The tracker is too far away. Readings pause and the gap is recorded."),
-        (ConnectionState::Reconnecting { attempt: 2, since: 0 }, "Connection dropped; retrying. Readings received before the drop are kept."),
-        (ConnectionState::AuthorizationExpired { message: String::new() }, "The tracker's credentials need renewing. Live recording stops until then; nothing is deleted."),
+        (
+            ConnectionState::PermissionDenied {
+                can_ask_again: true,
+            },
+            "Airspace needs the Nearby devices permission to talk to your tracker. You'll be asked once, with an explanation.",
+        ),
+        (
+            ConnectionState::BluetoothOff,
+            "Turn on Bluetooth to record. History stays available.",
+        ),
+        (
+            ConnectionState::OutOfRange { since: 0 },
+            "The tracker is too far away. Readings pause and the gap is recorded.",
+        ),
+        (
+            ConnectionState::Reconnecting {
+                attempt: 2,
+                since: 0,
+            },
+            "Connection dropped; retrying. Readings received before the drop are kept.",
+        ),
+        (
+            ConnectionState::AuthorizationExpired {
+                message: String::new(),
+            },
+            "The tracker's credentials need renewing. Live recording stops until then; nothing is deleted.",
+        ),
     ];
     view! {
         <Header title="Device" back=true />
         <Section title="Connection">
-            <div class="device-card">
-                <span class="status-dot off" aria-hidden="true"></span>
-                <div><p class="row-title">{state.title()}</p><p class="row-hint">{reason}</p></div>
+            <div class="device-card" role="status">
+                <span class=move || if app.live_connected(){"status-dot ok"}else{"status-dot off"} aria-hidden="true"></span>
+                <div><p class="row-title">"Fitbit Air"</p><p class="row-hint">{move || app.live_text()}</p></div>
             </div>
-            <button class="btn" disabled=true aria-describedby="connect-why">"Connect a tracker"</button>
-            <p id="connect-why" class="muted">"Pairing isn't available yet. Airspace won't pretend to connect: live recording will arrive as a native Android service once its data mapping is validated."</p>
-            {move || (app.db.get() == DbKind::Demo).then(|| view! {
-                <p class="notice">"The demo includes a simulated recording session that ended with a disconnection, so you can see how stale readings and gaps look."</p>
-            })}
+            {move || if crate::platform::is_android() && app.db.get()==DbKind::Personal {
+                view! {
+                    <div class="btn-row">
+                        <button class="btn" disabled=move || app.live_busy.get() on:click=move |_| spawn_local(async move { app.live_command("importCredentials").await; })>"Import device credentials"</button>
+                        <button class="btn primary" disabled=move || app.live_busy.get() || !app.live.with(|s|s["configured"]==true) on:click=move |_| spawn_local(async move { app.live_command("start").await; })>"Start recording"</button>
+                        <button class="btn" disabled=move || app.live_busy.get() on:click=move |_| spawn_local(async move { app.live_command("stop").await; })>"Stop recording"</button>
+                    </div>
+                    <p class="muted">"Credentials stay encrypted on this phone. Live recording needs Nearby devices permission and shows a persistent notification. Google Health must release its connection to the Air."</p>
+                    <p class="fineprint">"Research build: field mapping and credential renewal remain provisional. Recording gaps cannot currently be recovered offline."</p>
+                }.into_any()
+            } else {view!{<p class="muted">"Direct recording is available in the Android APK with your personal database. The web app supports viewing and importing history; demo data remains separate."</p>}.into_any()}}
+            <crate::screens::today::LiveReadings />
         </Section>
         <Section title="What live recording will provide">
             <DataTable caption="Live Bluetooth capabilities" headers=vec!["Measurement", "From Bluetooth"]
@@ -136,9 +159,17 @@ pub fn DataScreen() -> impl IntoView {
     let db_sig = Signal::derive(move || app.db.get());
     let switch = Callback::new(move |k: DbKind| {
         spawn_local(async move {
-            let r = if k == DbKind::Demo { app.open_demo().await } else { app.switch_db(k).await };
+            let r = if k == DbKind::Demo {
+                app.open_demo().await
+            } else {
+                app.switch_db(k).await
+            };
             match r {
-                Ok(()) => app.notify(if k == DbKind::Demo { "Showing demo data" } else { "Showing your personal data" }),
+                Ok(()) => app.notify(if k == DbKind::Demo {
+                    "Showing demo data"
+                } else {
+                    "Showing your personal data"
+                }),
                 Err(e) => app.error(e),
             }
         });
@@ -150,7 +181,11 @@ pub fn DataScreen() -> impl IntoView {
             app.busy.set(Some("Preparing backup…".into()));
             let r = async {
                 let json = app.backup_json().await?;
-                let name = format!("airspace-{}-backup-{}.json", app.db.get_untracked().key(), time::day_key(app.today_untracked()));
+                let name = format!(
+                    "airspace-{}-backup-{}.json",
+                    app.db.get_untracked().key(),
+                    time::day_key(app.today_untracked())
+                );
                 platform::save_file(&name, "application/json", &json).await
             }
             .await;
@@ -166,7 +201,16 @@ pub fn DataScreen() -> impl IntoView {
         spawn_local(async move {
             let r = async {
                 let csv = app.metric_csv(m).await?;
-                platform::save_file(&format!("airspace-{}-{}.csv", m.key(), time::day_key(app.today_untracked())), "text/csv", &csv).await
+                platform::save_file(
+                    &format!(
+                        "airspace-{}-{}.csv",
+                        m.key(),
+                        time::day_key(app.today_untracked())
+                    ),
+                    "text/csv",
+                    &csv,
+                )
+                .await
             }
             .await;
             match r {
@@ -182,7 +226,11 @@ pub fn DataScreen() -> impl IntoView {
                 Ok(()) => {
                     confirm_delete.set(false);
                     app.haptic();
-                    app.notify(if k == DbKind::Demo { "Demo data deleted" } else { "All personal data deleted from this device" });
+                    app.notify(if k == DbKind::Demo {
+                        "Demo data deleted"
+                    } else {
+                        "All personal data deleted from this device"
+                    });
                 }
                 Err(e) => app.error(e),
             }
@@ -281,7 +329,9 @@ fn RestoreBackup() -> impl IntoView {
         });
     };
     let restore = move |replace: bool| {
-        let Some(Ok(b)) = parsed.get_untracked() else { return };
+        let Some(Ok(b)) = parsed.get_untracked() else {
+            return;
+        };
         spawn_local(async move {
             app.busy.set(Some("Restoring backup…".into()));
             let r = app.restore(b, replace).await;
@@ -367,14 +417,31 @@ pub fn ImportScreen() -> impl IntoView {
                 return;
             }
             let now = platform::now_ms();
-            let ctx = ImportContext { default_tz: app.tz_untracked(), now, batch_id: format!("imp-{now}"), file_name: name.clone() };
+            let ctx = ImportContext {
+                default_tz: app.tz_untracked(),
+                now,
+                batch_id: format!("imp-{now}"),
+                file_name: name.clone(),
+            };
             let parsed = import::parse_file(&name, &text, &ctx);
             let existing = match import::span(&parsed.records) {
-                Some((a, b)) => crate::repo::measurements(DbKind::Personal, None, a - 2 * time::DAY_MS, b + 2 * time::DAY_MS).await.unwrap_or_default(),
+                Some((a, b)) => crate::repo::measurements(
+                    DbKind::Personal,
+                    None,
+                    a - 2 * time::DAY_MS,
+                    b + 2 * time::DAY_MS,
+                )
+                .await
+                .unwrap_or_default(),
                 None => vec![],
             };
             let preview = import::preview(&parsed, &existing, &ctx.default_tz);
-            staged.set_value(Some(Staged { parsed, preview, existing, file_name: name }));
+            staged.set_value(Some(Staged {
+                parsed,
+                preview,
+                existing,
+                file_name: name,
+            }));
             ver.update(|v| *v += 1);
             working.set(false);
         });
@@ -387,7 +454,8 @@ pub fn ImportScreen() -> impl IntoView {
             let plan = plan_merge(st.parsed.records.clone(), &st.preview.classes, pol);
             let mut writes = plan.insert.clone();
             // Never overwrite: superseded originals are kept, only flagged.
-            let by_id: HashMap<&str, &Measurement> = st.existing.iter().map(|m| (m.id.as_str(), m)).collect();
+            let by_id: HashMap<&str, &Measurement> =
+                st.existing.iter().map(|m| (m.id.as_str(), m)).collect();
             for (old, new) in &plan.supersede {
                 if let Some(m) = by_id.get(old.as_str()) {
                     let mut m = (*m).clone();
@@ -395,31 +463,49 @@ pub fn ImportScreen() -> impl IntoView {
                     writes.push(m);
                 }
             }
-            let batch_id = st.parsed.records.first().and_then(|m| m.prov.batch_id.clone()).unwrap_or_else(|| format!("imp-{}", platform::now_ms()));
+            let batch_id = st
+                .parsed
+                .records
+                .first()
+                .and_then(|m| m.prov.batch_id.clone())
+                .unwrap_or_else(|| format!("imp-{}", platform::now_ms()));
             let r = async {
-                app.busy.set(Some(format!("Importing {}…", plural(plan.insert.len(), "record", "records"))));
+                app.busy.set(Some(format!(
+                    "Importing {}…",
+                    plural(plan.insert.len(), "record", "records")
+                )));
                 app.ingest(writes).await?;
                 let mut j = st.parsed.journal.clone();
                 // Imported notes never replace notes already written for that day.
-                let have: Vec<String> = app.journal.with_untracked(|x| x.iter().map(|e| e.day.clone()).collect());
+                let have: Vec<String> = app
+                    .journal
+                    .with_untracked(|x| x.iter().map(|e| e.day.clone()).collect());
                 j.retain(|e| !have.contains(&e.day));
                 for e in j {
                     app.save_journal(e).await?;
                 }
                 let t = st.preview.totals();
-                crate::repo::put_batch(DbKind::Personal, &ImportBatch {
-                    id: batch_id,
-                    created_at: platform::now_ms(),
-                    adapter: st.parsed.adapter.clone(),
-                    file_name: st.file_name.clone(),
-                    added: plan.insert.len(),
-                    duplicates: t.duplicates,
-                    conflicts: t.conflicts,
-                    conflict_policy: pol.key().into(),
-                    first_day: st.preview.first_day.clone(),
-                    last_day: st.preview.last_day.clone(),
-                }).await?;
-                app.batches.set(crate::repo::batches(DbKind::Personal).await.unwrap_or_default());
+                crate::repo::put_batch(
+                    DbKind::Personal,
+                    &ImportBatch {
+                        id: batch_id,
+                        created_at: platform::now_ms(),
+                        adapter: st.parsed.adapter.clone(),
+                        file_name: st.file_name.clone(),
+                        added: plan.insert.len(),
+                        duplicates: t.duplicates,
+                        conflicts: t.conflicts,
+                        conflict_policy: pol.key().into(),
+                        first_day: st.preview.first_day.clone(),
+                        last_day: st.preview.last_day.clone(),
+                    },
+                )
+                .await?;
+                app.batches.set(
+                    crate::repo::batches(DbKind::Personal)
+                        .await
+                        .unwrap_or_default(),
+                );
                 Ok::<usize, String>(plan.insert.len())
             }
             .await;
@@ -537,7 +623,11 @@ pub fn SettingsScreen() -> impl IntoView {
     let theme = Signal::derive(move || app.settings.with(|s| s.theme));
     let units = Signal::derive(move || app.settings.with(|s| s.units));
     let temp = Signal::derive(move || app.settings.with(|s| s.temperature));
-    let zones: Vec<&'static str> = chrono_tz::TZ_VARIANTS.iter().map(|z| z.name()).filter(|n| n.contains('/') || *n == "UTC").collect();
+    let zones: Vec<&'static str> = chrono_tz::TZ_VARIANTS
+        .iter()
+        .map(|z| z.name())
+        .filter(|n| n.contains('/') || *n == "UTC")
+        .collect();
     let change_tz = move |tz: String| {
         app.update_settings(|s| s.timezone = tz);
         spawn_local(async move {
@@ -584,13 +674,34 @@ pub fn SettingsScreen() -> impl IntoView {
 #[component]
 pub fn About() -> impl IntoView {
     let rows: Vec<Vec<String>> = vec![
-        vec!["Today, Explore, Journal, local insights".into(), "Working".into()],
-        vec!["Local storage (IndexedDB / SQLite), backup, CSV export".into(), "Working".into()],
-        vec!["History import (JSON/CSV) with preview, duplicates, conflicts".into(), "Working".into()],
-        vec!["Demo dataset".into(), "Simulated — clearly marked, separate database".into()],
-        vec!["AI coach".into(), "Optional — works only with your own provider and key".into()],
-        vec!["Bluetooth live recording".into(), "Not in this version — interface prepared".into()],
-        vec!["Google-backed history sync".into(), "Not in this version — reports Not connected".into()],
+        vec![
+            "Today, Explore, Journal, local insights".into(),
+            "Working".into(),
+        ],
+        vec![
+            "Local storage (IndexedDB / SQLite), backup, CSV export".into(),
+            "Working".into(),
+        ],
+        vec![
+            "History import (JSON/CSV) with preview, duplicates, conflicts".into(),
+            "Working".into(),
+        ],
+        vec![
+            "Demo dataset".into(),
+            "Simulated — clearly marked, separate database".into(),
+        ],
+        vec![
+            "AI coach".into(),
+            "Optional — works only with your own provider and key".into(),
+        ],
+        vec![
+            "Bluetooth live recording".into(),
+            "Not in this version — interface prepared".into(),
+        ],
+        vec![
+            "Google-backed history sync".into(),
+            "Not in this version — reports Not connected".into(),
+        ],
     ];
     view! {
         <Header title="About Airspace" back=true />

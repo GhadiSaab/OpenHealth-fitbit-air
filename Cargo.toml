@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/airspace-core", "crates/tauri-plugin-vault", "app", "src-tauri"]
+members = ["crates/airspace-core", "crates/tauri-plugin-vault", "crates/tauri-plugin-air", "app", "src-tauri"]
 # `cargo test` at the root runs the platform-independent core only.
 default-members = ["crates/airspace-core"]
 

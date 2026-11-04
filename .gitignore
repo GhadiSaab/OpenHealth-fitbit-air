@@ -37,7 +37,13 @@ android/local.properties
 .env
 .env.*
 target/
+.tools/
+.superpowers/
+secrets/
 app/dist/
 src-tauri/gen/android/app/build
 src-tauri/gen/android/.gradle
 src-tauri/gen/android/build
+
+# Generated Android compiler state
+**/.kotlin/

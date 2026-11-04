@@ -32,7 +32,11 @@ pub fn Onboarding() -> impl IntoView {
     let later = move || {
         spawn_local(async move {
             let _ = app.switch_db(airspace_core::DbKind::Personal).await;
-            finish(Route::Today);
+            finish(if crate::platform::is_android() {
+                Route::Device
+            } else {
+                Route::Today
+            });
         });
     };
     view! {
@@ -53,7 +57,7 @@ pub fn Onboarding() -> impl IntoView {
                 </button>
                 <button class="choice" on:click=move |_| later()>
                     <span class="choice-icon tone-heart"><Icon name="bluetooth" /></span>
-                    <span class="choice-text"><span class="row-title">"Set up my device later"</span><span class="row-hint">"Start with an empty journal. Bluetooth recording comes in a later version."</span></span>
+                    <span class="choice-text"><span class="row-title">{if crate::platform::is_android(){"Set up my device"}else{"Set up my device later"}}</span><span class="row-hint">"Connect your Air in the Android app, or start with an empty journal."</span></span>
                     <Icon name="right" />
                 </button>
             </div>

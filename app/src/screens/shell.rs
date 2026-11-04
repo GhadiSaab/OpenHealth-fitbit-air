@@ -32,7 +32,8 @@ pub fn Shell() -> impl IntoView {
         };
         platform::set_root_attr("data-theme", if dark { "dark" } else { "light" });
         platform::set_theme_color(if dark { "#121314" } else { "#F6F3EC" });
-        let reduced = s.motion == MotionPref::Reduced || platform::media_matches("(prefers-reduced-motion: reduce)");
+        let reduced = s.motion == MotionPref::Reduced
+            || platform::media_matches("(prefers-reduced-motion: reduce)");
         platform::set_root_attr("data-motion", if reduced { "reduced" } else { "full" });
     });
 
@@ -49,10 +50,14 @@ pub fn Shell() -> impl IntoView {
         }
         platform::scroll_top();
         // Move focus to the new screen's heading for screen-reader users.
-        set_timeout(|| platform::focus_by_id("screen-title"), std::time::Duration::from_millis(30));
+        set_timeout(
+            || platform::focus_by_id("screen-title"),
+            std::time::Duration::from_millis(30),
+        );
     });
     listen(win.as_ref(), "hashchange", move |_| {
-        if let Some(r) = Route::from_hash(&platform::window().location().hash().unwrap_or_default()) {
+        if let Some(r) = Route::from_hash(&platform::window().location().hash().unwrap_or_default())
+        {
             if r != app.route.get_untracked() {
                 app.route.set(r);
             }
@@ -63,13 +68,22 @@ pub fn Shell() -> impl IntoView {
     // Clock, connectivity and viewport.
     {
         let tick = Closure::<dyn FnMut()>::new(move || app.now.set(now_ms()));
-        let _ = win.set_interval_with_callback_and_timeout_and_arguments_0(tick.as_ref().unchecked_ref(), 30_000);
+        let _ = win.set_interval_with_callback_and_timeout_and_arguments_0(
+            tick.as_ref().unchecked_ref(),
+            30_000,
+        );
         tick.forget();
     }
     listen(win.as_ref(), "online", move |_| app.online.set(true));
     listen(win.as_ref(), "offline", move |_| app.online.set(false));
     listen(win.as_ref(), "resize", move |_| {
-        app.vw.set(platform::window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(390.0));
+        app.vw.set(
+            platform::window()
+                .inner_width()
+                .ok()
+                .and_then(|v| v.as_f64())
+                .unwrap_or(390.0),
+        );
     });
     if let Ok(mq) = win.match_media("(prefers-color-scheme: dark)") {
         if let Some(mq) = mq {
@@ -77,6 +91,24 @@ pub fn Shell() -> impl IntoView {
         }
     }
 
+    // Snapshot polling is presentation only; native recording survives this WebView.
+    if platform::is_android() {
+        let tick = Closure::<dyn FnMut()>::new(move || {
+            spawn_local(async move {
+                app.refresh_live().await;
+            });
+        });
+        if let Ok(id) = win.set_interval_with_callback_and_timeout_and_arguments_0(
+            tick.as_ref().unchecked_ref(),
+            3000,
+        ) {
+            let tick = StoredValue::new_local(tick);
+            on_cleanup(move || {
+                platform::window().clear_interval_with_handle(id);
+                tick.dispose();
+            });
+        }
+    }
     // Boot.
     spawn_local(async move {
         if let Err(e) = app.load().await {
@@ -97,7 +129,10 @@ pub fn Shell() -> impl IntoView {
             Route::Onboarding
         } else {
             let h = platform::window().location().hash().unwrap_or_default();
-            Route::from_hash(&h).or_else(|| ls_get(LS_ROUTE).and_then(|h| Route::from_hash(&h))).filter(|r| *r != Route::Onboarding).unwrap_or(Route::Today)
+            Route::from_hash(&h)
+                .or_else(|| ls_get(LS_ROUTE).and_then(|h| Route::from_hash(&h)))
+                .filter(|r| *r != Route::Onboarding)
+                .unwrap_or(Route::Today)
         };
         app.route.set(start);
         app.ready.set(true);

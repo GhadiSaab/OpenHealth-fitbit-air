@@ -15,6 +15,11 @@ val tauriProperties = Properties().apply {
 }
 
 android {
+    packaging {
+        resources.merges.add("META-INF/LICENSE.md")
+        resources.merges.add("META-INF/NOTICE.md")
+        resources.excludes.add("META-INF/versions/**/OSGI-INF/MANIFEST.MF")
+    }
     compileSdk = 37
     namespace = "app.airspace.fitness"
     defaultConfig {

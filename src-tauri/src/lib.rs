@@ -6,6 +6,7 @@
 //! reminders. No command logs health data or secrets.
 
 mod db;
+mod live;
 
 use airspace_core::ai::{self, AiProviderKind, HttpSpec};
 use std::time::Duration;
@@ -24,13 +25,25 @@ async fn db_open(app: tauri::AppHandle, db: String) -> CmdResult<()> {
 }
 
 #[tauri::command]
-async fn db_put_measurements(app: tauri::AppHandle, db: String, rows: Vec<String>) -> CmdResult<()> {
+async fn db_put_measurements(
+    app: tauri::AppHandle,
+    db: String,
+    rows: Vec<String>,
+) -> CmdResult<()> {
     db::with(&app, &db, |c| db::put_measurements(c, &rows))
 }
 
 #[tauri::command]
-async fn db_measurements(app: tauri::AppHandle, db: String, metric: Option<String>, from: i64, to: i64) -> CmdResult<Vec<String>> {
-    db::with(&app, &db, |c| db::measurements(c, metric.as_deref(), from, to))
+async fn db_measurements(
+    app: tauri::AppHandle,
+    db: String,
+    metric: Option<String>,
+    from: i64,
+    to: i64,
+) -> CmdResult<Vec<String>> {
+    db::with(&app, &db, |c| {
+        db::measurements(c, metric.as_deref(), from, to)
+    })
 }
 
 #[tauri::command]
@@ -39,12 +52,22 @@ async fn db_all(app: tauri::AppHandle, db: String, table: String) -> CmdResult<V
 }
 
 #[tauri::command]
-async fn db_put_keyed(app: tauri::AppHandle, db: String, table: String, rows: Vec<(String, String)>) -> CmdResult<()> {
+async fn db_put_keyed(
+    app: tauri::AppHandle,
+    db: String,
+    table: String,
+    rows: Vec<(String, String)>,
+) -> CmdResult<()> {
     db::with(&app, &db, |c| db::put_keyed(c, &table, &rows))
 }
 
 #[tauri::command]
-async fn db_delete_keyed(app: tauri::AppHandle, db: String, table: String, keys: Vec<String>) -> CmdResult<()> {
+async fn db_delete_keyed(
+    app: tauri::AppHandle,
+    db: String,
+    table: String,
+    keys: Vec<String>,
+) -> CmdResult<()> {
     db::with(&app, &db, |c| db::delete_keyed(c, &table, &keys))
 }
 
@@ -55,7 +78,11 @@ async fn db_meta_get(app: tauri::AppHandle, db: String, key: String) -> CmdResul
 
 #[tauri::command]
 async fn db_clear(app: tauri::AppHandle, db: String) -> CmdResult<()> {
-    db::with(&app, &db, db::clear)
+    if db == "personal" {
+        live::clear(&app)
+    } else {
+        db::with(&app, &db, db::clear)
+    }
 }
 
 #[tauri::command]
@@ -68,18 +95,32 @@ async fn db_count(app: tauri::AppHandle, db: String) -> CmdResult<u32> {
 /// Shows the system "save as" dialog and writes `content`. Returns the file
 /// name, or `None` if the user cancelled.
 #[tauri::command]
-async fn export_file(app: tauri::AppHandle, name: String, content: String) -> CmdResult<Option<String>> {
+async fn export_file(
+    app: tauri::AppHandle,
+    name: String,
+    content: String,
+) -> CmdResult<Option<String>> {
     use std::io::Write;
     use tauri_plugin_dialog::DialogExt;
     use tauri_plugin_fs::{FsExt, OpenOptions};
     let ext = name.rsplit('.').next().unwrap_or("txt").to_string();
-    let Some(path) = app.dialog().file().set_file_name(&name).add_filter(ext.to_uppercase(), &[ext.as_str()]).blocking_save_file() else {
+    let Some(path) = app
+        .dialog()
+        .file()
+        .set_file_name(&name)
+        .add_filter(ext.to_uppercase(), &[ext.as_str()])
+        .blocking_save_file()
+    else {
         return Ok(None);
     };
     let mut opts = OpenOptions::new();
     opts.write(true).create(true).truncate(true);
-    let mut f = app.fs().open(path, opts).map_err(|e| format!("Couldn't create the file: {e}"))?;
-    f.write_all(content.as_bytes()).map_err(|e| format!("Couldn't write the file: {e}"))?;
+    let mut f = app
+        .fs()
+        .open(path, opts)
+        .map_err(|e| format!("Couldn't create the file: {e}"))?;
+    f.write_all(content.as_bytes())
+        .map_err(|e| format!("Couldn't write the file: {e}"))?;
     Ok(Some(name))
 }
 
@@ -101,22 +142,38 @@ async fn ai_key_delete(app: tauri::AppHandle) -> CmdResult<()> {
 
 #[tauri::command]
 async fn ai_key_status(app: tauri::AppHandle) -> CmdResult<bool> {
-    Ok(app.vault().get(AI_KEY).map_err(|e| e.to_string())?.is_some())
+    Ok(app
+        .vault()
+        .get(AI_KEY)
+        .map_err(|e| e.to_string())?
+        .is_some())
 }
 
 fn allowed_url(url: &str) -> bool {
     let u = url.to_ascii_lowercase();
-    (u.starts_with("https://") || u.starts_with("http://localhost") || u.starts_with("http://127.0.0.1")) && !u.contains('?') && !u.contains('#')
+    (u.starts_with("https://")
+        || u.starts_with("http://localhost")
+        || u.starts_with("http://127.0.0.1"))
+        && !u.contains('?')
+        && !u.contains('#')
 }
 
 /// Sends a request built by `airspace_core::ai`, adding the key from the
 /// vault. Returns (status, body). The key never reaches the webview.
 #[tauri::command]
-async fn ai_request(app: tauri::AppHandle, provider: AiProviderKind, spec: HttpSpec) -> CmdResult<(u16, String)> {
+async fn ai_request(
+    app: tauri::AppHandle,
+    provider: AiProviderKind,
+    spec: HttpSpec,
+) -> CmdResult<(u16, String)> {
     if !allowed_url(&spec.url) {
         return Err("The endpoint must use HTTPS.".into());
     }
-    let key = app.vault().get(AI_KEY).map_err(|e| e.to_string())?.ok_or("No API key is stored. Add one in Coach settings.")?;
+    let key = app
+        .vault()
+        .get(AI_KEY)
+        .map_err(|e| e.to_string())?
+        .ok_or("No API key is stored. Add one in Coach settings.")?;
     let (hk, hv) = ai::auth_header(provider, &key);
     tauri::async_runtime::spawn_blocking(move || {
         let agent: ureq::Agent = ureq::Agent::config_builder()
@@ -135,7 +192,8 @@ async fn ai_request(app: tauri::AppHandle, provider: AiProviderKind, spec: HttpS
             for (k, v) in &spec.headers {
                 r = r.header(k.as_str(), v.as_str());
             }
-            r.header(hk.as_str(), hv.as_str()).send(spec.body.unwrap_or_default().as_str())
+            r.header(hk.as_str(), hv.as_str())
+                .send(spec.body.unwrap_or_default().as_str())
         };
         match result {
             Ok(resp) => {
@@ -144,7 +202,9 @@ async fn ai_request(app: tauri::AppHandle, provider: AiProviderKind, spec: HttpS
                 Ok((status, body))
             }
             // Deliberately generic: transport errors can echo request details.
-            Err(_) => Err("Couldn't reach the provider. Check your connection and the endpoint.".to_string()),
+            Err(_) => Err(
+                "Couldn't reach the provider. Check your connection and the endpoint.".to_string(),
+            ),
         }
     })
     .await
@@ -159,23 +219,39 @@ const REMINDER_ID: i32 = 4101;
 async fn reminders_set(app: tauri::AppHandle, enabled: bool, time: String) -> CmdResult<()> {
     #[cfg(mobile)]
     {
-        use tauri_plugin_notification::{NotificationExt, PermissionState, Schedule, ScheduleInterval};
+        use tauri_plugin_notification::{
+            NotificationExt, PermissionState, Schedule, ScheduleInterval,
+        };
         let n = app.notification();
         let _ = n.cancel(vec![REMINDER_ID]);
         if !enabled {
             return Ok(());
         }
-        if !matches!(n.permission_state().map_err(|e| e.to_string())?, PermissionState::Granted)
-            && !matches!(n.request_permission().map_err(|e| e.to_string())?, PermissionState::Granted)
-        {
+        if !matches!(
+            n.permission_state().map_err(|e| e.to_string())?,
+            PermissionState::Granted
+        ) && !matches!(
+            n.request_permission().map_err(|e| e.to_string())?,
+            PermissionState::Granted
+        ) {
             return Err("Notifications are turned off for Airspace in system settings.".into());
         }
-        let (h, m) = time.split_once(':').and_then(|(h, m)| Some((h.parse::<u8>().ok()?, m.parse::<u8>().ok()?))).ok_or("Invalid time")?;
+        let (h, m) = time
+            .split_once(':')
+            .and_then(|(h, m)| Some((h.parse::<u8>().ok()?, m.parse::<u8>().ok()?)))
+            .ok_or("Invalid time")?;
         n.builder()
             .id(REMINDER_ID)
             .title("Airspace")
             .body("A moment to add today's journal note, if you'd like.")
-            .schedule(Schedule::Interval { interval: ScheduleInterval { hour: Some(h), minute: Some(m), ..Default::default() }, allow_while_idle: false })
+            .schedule(Schedule::Interval {
+                interval: ScheduleInterval {
+                    hour: Some(h),
+                    minute: Some(m),
+                    ..Default::default()
+                },
+                allow_while_idle: false,
+            })
             .show()
             .map_err(|e| e.to_string())?;
         Ok(())
@@ -191,15 +267,18 @@ async fn reminders_set(app: tauri::AppHandle, enabled: bool, time: String) -> Cm
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_vault::init())
+        .plugin(tauri_plugin_air::init())
         .plugin(tauri_plugin_haptics::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             app.manage(db::Dbs::default());
+            live::launch(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            live::live_action,
             db_open,
             db_put_measurements,
             db_measurements,

@@ -1,5 +1,9 @@
 # Airspace
 
+> Native Bluetooth work is paused at the owner's request (2026-11-04).
+> The Pixel received live readings, but sustained DTLS connection reliability
+> remains unresolved. Read [RESUME.md](RESUME.md) for the exact state and next steps.
+
 A private, local-first fitness companion for a Fitbit Air. Your data stays on
 your device: no account, no subscription, no analytics, and no network
 needed for anything except the optional AI coach.

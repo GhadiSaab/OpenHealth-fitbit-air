@@ -104,7 +104,11 @@ impl Route {
         }
     }
     pub fn from_hash(h: &str) -> Option<Route> {
-        let p: Vec<&str> = h.trim_start_matches('#').trim_start_matches('/').split('/').collect();
+        let p: Vec<&str> = h
+            .trim_start_matches('#')
+            .trim_start_matches('/')
+            .split('/')
+            .collect();
         Some(match p.as_slice() {
             ["welcome"] => Route::Onboarding,
             ["today"] | [""] => Route::Today,
@@ -156,6 +160,9 @@ pub struct App {
     /// Bumped after every write, so on-demand loads refresh.
     pub data_rev: RwSignal<u64>,
     pub demo_device: RwSignal<Option<DemoDevice>>,
+    pub live: RwSignal<serde_json::Value>,
+    pub live_busy: RwSignal<bool>,
+    pub live_loaded_at: RwSignal<i64>,
     pub sheet: RwSignal<Option<Sheet>>,
     pub ai: RwSignal<Option<AiConfig>>,
     /// Browser only: the AI key, kept in memory and never persisted.
@@ -190,7 +197,11 @@ impl App {
             Some("demo") => DbKind::Demo,
             _ => DbKind::Personal,
         };
-        let day = ls_get(LS_DAY).as_deref().and_then(time::parse_day).filter(|d| *d <= today).unwrap_or(today);
+        let day = ls_get(LS_DAY)
+            .as_deref()
+            .and_then(time::parse_day)
+            .filter(|d| *d <= today)
+            .unwrap_or(today);
         App {
             settings: RwSignal::new(settings),
             db: RwSignal::new(db),
@@ -204,6 +215,11 @@ impl App {
             toast: RwSignal::new(None),
             data_rev: RwSignal::new(0),
             demo_device: RwSignal::new(None),
+            live: RwSignal::new(
+                serde_json::json!({"state":"unavailable","recording":false,"configured":false}),
+            ),
+            live_busy: RwSignal::new(false),
+            live_loaded_at: RwSignal::new(0),
             sheet: RwSignal::new(None),
             ai: RwSignal::new(ls_get_json(LS_AI)),
             ai_key_mem: RwSignal::new(None),
@@ -212,15 +228,77 @@ impl App {
             now: RwSignal::new(now_ms()),
             measurement_count: RwSignal::new(0),
             last_ai_context: RwSignal::new(None),
-            vw: RwSignal::new(platform::window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(390.0)),
+            vw: RwSignal::new(
+                platform::window()
+                    .inner_width()
+                    .ok()
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(390.0),
+            ),
         }
     }
 
+    pub async fn refresh_live(&self) {
+        if !platform::is_android() || self.live_busy.get_untracked() {
+            return;
+        }
+        self.live_busy.set(true);
+        let result = platform::invoke::<serde_json::Value>(
+            "live_action",
+            serde_json::json!({"action":"status"}),
+        )
+        .await;
+        if let Ok(status) = result {
+            self.live.set(status);
+            if self.db.get_untracked() == DbKind::Personal
+                && now_ms() - self.live_loaded_at.get_untracked() > 15_000
+            {
+                self.live_loaded_at.set(now_ms());
+                if let Err(e) = self.load().await {
+                    self.error(e);
+                }
+            }
+        }
+        self.live_busy.set(false);
+    }
+    pub async fn live_command(&self, action: &str) {
+        if self.live_busy.get_untracked() {
+            return;
+        }
+        self.live_busy.set(true);
+        match platform::invoke::<serde_json::Value>(
+            "live_action",
+            serde_json::json!({"action":action}),
+        )
+        .await
+        {
+            Ok(status) => {
+                self.live.set(status);
+            }
+            Err(e) => self.error(e),
+        }
+        self.live_busy.set(false);
+    }
+    pub fn live_connected(&self) -> bool {
+        self.db.get() == DbKind::Personal
+            && self
+                .live
+                .with(|s| s["state"] == "connected" && s["recording"] == true)
+    }
+    pub fn live_text(&self) -> String {
+        self.live.with(|s| {
+            s.get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Import your device credentials to connect your Air")
+                .to_string()
+        })
+    }
     pub fn tz(&self) -> Tz {
         self.settings.with(|s| time::parse_tz(&s.timezone))
     }
     pub fn tz_untracked(&self) -> Tz {
-        self.settings.with_untracked(|s| time::parse_tz(&s.timezone))
+        self.settings
+            .with_untracked(|s| time::parse_tz(&s.timezone))
     }
     pub fn today(&self) -> NaiveDate {
         time::local_day_in(self.now.get(), &self.tz())
@@ -251,14 +329,23 @@ impl App {
     }
 
     pub fn notify(&self, msg: impl Into<String>) {
-        self.toast.set(Some(Toast { id: now_ms() as u64, message: msg.into(), error: false }));
+        self.toast.set(Some(Toast {
+            id: now_ms() as u64,
+            message: msg.into(),
+            error: false,
+        }));
     }
     pub fn error(&self, msg: impl Into<String>) {
-        self.toast.set(Some(Toast { id: now_ms() as u64, message: msg.into(), error: true }));
+        self.toast.set(Some(Toast {
+            id: now_ms() as u64,
+            message: msg.into(),
+            error: true,
+        }));
     }
 
     pub fn save_settings(&self) {
-        self.settings.with_untracked(|s| ls_set_json(LS_SETTINGS, s));
+        self.settings
+            .with_untracked(|s| ls_set_json(LS_SETTINGS, s));
     }
 
     pub fn update_settings(&self, f: impl FnOnce(&mut Settings)) {
@@ -271,7 +358,11 @@ impl App {
     }
 
     fn ctx(&self) -> SummaryContext {
-        SummaryContext { tz: self.tz_untracked(), now: now_ms(), demo: self.db.get_untracked() == DbKind::Demo }
+        SummaryContext {
+            tz: self.tz_untracked(),
+            now: now_ms(),
+            demo: self.db.get_untracked() == DbKind::Demo,
+        }
     }
 
     /// Loads summaries, journal and metadata for the active database.
@@ -283,14 +374,25 @@ impl App {
         let batches = repo::batches(k).await.unwrap_or_default();
         let count = repo::count(k).await.unwrap_or(0);
         let dev = if k == DbKind::Demo {
-            repo::meta_get(k, "demo_device").await.ok().flatten().and_then(|s| serde_json::from_str(&s).ok())
+            repo::meta_get(k, "demo_device")
+                .await
+                .ok()
+                .flatten()
+                .and_then(|s| serde_json::from_str(&s).ok())
         } else {
             None
         };
         // Recompute summaries calculated by an older version or another time zone.
         let tz_key = self.settings.with_untracked(|s| s.timezone.clone());
-        let stale = sums.iter().any(|s| s.calc_version != aggregate::CALC_VERSION)
-            || repo::meta_get(k, "summary_tz").await.ok().flatten().map(|t| t != tz_key).unwrap_or(false);
+        let stale = sums
+            .iter()
+            .any(|s| s.calc_version != aggregate::CALC_VERSION)
+            || repo::meta_get(k, "summary_tz")
+                .await
+                .ok()
+                .flatten()
+                .map(|t| t != tz_key)
+                .unwrap_or(false);
         self.summaries.set(SummaryIndex::from_vec(sums));
         self.journal.set(journal);
         self.batches.set(batches);
@@ -326,12 +428,29 @@ impl App {
         let today = time::local_day_in(now, &tz);
         let ds = demo::generate(today, &tz, now);
         repo::put_measurements(k, &ds.measurements).await?;
-        let sums = aggregate::summarize(&ds.measurements, &SummaryContext { tz, now, demo: true });
+        let sums = aggregate::summarize(
+            &ds.measurements,
+            &SummaryContext {
+                tz,
+                now,
+                demo: true,
+            },
+        );
         repo::put_summaries(k, &sums).await?;
         repo::put_journal(k, &ds.journal).await?;
-        repo::meta_set(k, "demo_device", &serde_json::to_string(&ds.device).unwrap_or_default()).await?;
+        repo::meta_set(
+            k,
+            "demo_device",
+            &serde_json::to_string(&ds.device).unwrap_or_default(),
+        )
+        .await?;
         repo::meta_set(k, "demo_day", &time::day_key(today)).await?;
-        repo::meta_set(k, "summary_tz", &self.settings.with_untracked(|s| s.timezone.clone())).await?;
+        repo::meta_set(
+            k,
+            "summary_tz",
+            &self.settings.with_untracked(|s| s.timezone.clone()),
+        )
+        .await?;
         self.busy.set(None);
         Ok(())
     }
@@ -339,7 +458,10 @@ impl App {
     /// Opens the demo, creating or refreshing it so "today" has data.
     pub async fn open_demo(&self) -> Result<(), String> {
         repo::open(DbKind::Demo).await?;
-        let day = repo::meta_get(DbKind::Demo, "demo_day").await.ok().flatten();
+        let day = repo::meta_get(DbKind::Demo, "demo_day")
+            .await
+            .ok()
+            .flatten();
         if day.as_deref() != Some(time::day_key(self.today_untracked()).as_str()) {
             let refreshed = day.is_some();
             self.generate_demo().await?;
@@ -358,16 +480,23 @@ impl App {
         let k = self.db.get_untracked();
         repo::put_measurements(k, &items).await?;
         self.recompute_for(&items).await?;
-        self.measurement_count.set(repo::count(k).await.unwrap_or(0));
+        self.measurement_count
+            .set(repo::count(k).await.unwrap_or(0));
         Ok(())
     }
 
     async fn recompute_for(&self, changed: &[Measurement]) -> Result<(), String> {
         let k = self.db.get_untracked();
         let ctx = self.ctx();
-        let affected: BTreeSet<(Metric, NaiveDate)> = changed.iter().map(|m| (m.metric, aggregate::day_of(m, &ctx.tz))).collect();
+        let affected: BTreeSet<(Metric, NaiveDate)> = changed
+            .iter()
+            .map(|m| (m.metric, aggregate::day_of(m, &ctx.tz)))
+            .collect();
         let metrics: HashSet<Metric> = affected.iter().map(|(m, _)| *m).collect();
-        let (Some(first), Some(last)) = (affected.iter().map(|(_, d)| *d).min(), affected.iter().map(|(_, d)| *d).max()) else {
+        let (Some(first), Some(last)) = (
+            affected.iter().map(|(_, d)| *d).min(),
+            affected.iter().map(|(_, d)| *d).max(),
+        ) else {
             return Ok(());
         };
         // Load a margin around the affected days: sessions and offsets can cross midnight.
@@ -376,12 +505,30 @@ impl App {
         let mut fresh = vec![];
         for m in metrics {
             let ms = repo::measurements(k, Some(m), from, to).await?;
-            fresh.extend(aggregate::summarize(&ms, &ctx).into_iter().filter(|s| time::parse_day(&s.day).map(|d| affected.contains(&(m, d))).unwrap_or(false)));
+            fresh.extend(aggregate::summarize(&ms, &ctx).into_iter().filter(|s| {
+                time::parse_day(&s.day)
+                    .map(|d| affected.contains(&(m, d)))
+                    .unwrap_or(false)
+            }));
         }
-        let have: HashSet<(Metric, NaiveDate)> = fresh.iter().filter_map(|s| Some((s.metric, time::parse_day(&s.day)?))).collect();
-        let gone: Vec<(Metric, NaiveDate)> = affected.iter().filter(|x| !have.contains(x)).copied().collect();
+        let have: HashSet<(Metric, NaiveDate)> = fresh
+            .iter()
+            .filter_map(|s| Some((s.metric, time::parse_day(&s.day)?)))
+            .collect();
+        let gone: Vec<(Metric, NaiveDate)> = affected
+            .iter()
+            .filter(|x| !have.contains(x))
+            .copied()
+            .collect();
         repo::put_summaries(k, &fresh).await?;
-        repo::delete_summaries(k, &gone.iter().map(|(m, d)| aggregate::summary_key(*m, &time::day_key(*d))).collect::<Vec<_>>()).await?;
+        repo::delete_summaries(
+            k,
+            &gone
+                .iter()
+                .map(|(m, d)| aggregate::summary_key(*m, &time::day_key(*d)))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
         self.summaries.update(|idx| {
             idx.remove(&gone);
             idx.extend(fresh);
@@ -396,10 +543,17 @@ impl App {
         let k = self.db.get_untracked();
         let all = repo::all_measurements(k).await?;
         let sums = aggregate::summarize(&all, &self.ctx());
-        let old: Vec<String> = self.summaries.with_untracked(|i| i.map.values().map(DaySummary::key).collect());
+        let old: Vec<String> = self
+            .summaries
+            .with_untracked(|i| i.map.values().map(DaySummary::key).collect());
         repo::delete_summaries(k, &old).await?;
         repo::put_summaries(k, &sums).await?;
-        repo::meta_set(k, "summary_tz", &self.settings.with_untracked(|s| s.timezone.clone())).await?;
+        repo::meta_set(
+            k,
+            "summary_tz",
+            &self.settings.with_untracked(|s| s.timezone.clone()),
+        )
+        .await?;
         self.summaries.set(SummaryIndex::from_vec(sums));
         self.data_rev.update(|r| *r += 1);
         self.busy.set(None);
@@ -460,9 +614,13 @@ impl App {
     /// Restores a backup into the active database.
     pub async fn restore(&self, b: Backup, replace: bool) -> Result<usize, String> {
         let k = self.db.get_untracked();
-        let backup_is_demo = b.database == DbKind::Demo || b.measurements.iter().any(|m| m.prov.demo);
+        let backup_is_demo =
+            b.database == DbKind::Demo || b.measurements.iter().any(|m| m.prov.demo);
         if k == DbKind::Personal && backup_is_demo {
-            return Err("This backup contains demo data and can't be restored into your personal database.".into());
+            return Err(
+                "This backup contains demo data and can't be restored into your personal database."
+                    .into(),
+            );
         }
         if k == DbKind::Demo && !backup_is_demo {
             return Err("Switch to your personal data before restoring a personal backup.".into());
@@ -473,9 +631,17 @@ impl App {
         let existing: HashSet<String> = if replace {
             HashSet::new()
         } else {
-            repo::all_measurements(k).await?.into_iter().map(|m| m.id).collect()
+            repo::all_measurements(k)
+                .await?
+                .into_iter()
+                .map(|m| m.id)
+                .collect()
         };
-        let new: Vec<Measurement> = b.measurements.into_iter().filter(|m| !existing.contains(&m.id)).collect();
+        let new: Vec<Measurement> = b
+            .measurements
+            .into_iter()
+            .filter(|m| !existing.contains(&m.id))
+            .collect();
         let n = new.len();
         repo::put_measurements(k, &new).await?;
         repo::put_journal(k, &b.journal).await?;
@@ -496,7 +662,10 @@ impl App {
 
 /// A signal filled asynchronously whenever its key changes. Late results
 /// from superseded keys are discarded.
-pub fn async_signal<K, T, Fut>(key: impl Fn() -> K + 'static, load: impl Fn(K) -> Fut + 'static) -> RwSignal<Option<T>>
+pub fn async_signal<K, T, Fut>(
+    key: impl Fn() -> K + 'static,
+    load: impl Fn(K) -> Fut + 'static,
+) -> RwSignal<Option<T>>
 where
     K: Clone + PartialEq + Send + Sync + 'static,
     T: Send + Sync + 'static,
@@ -521,11 +690,18 @@ where
 }
 
 /// Measurements for one metric over a set of local days.
-pub async fn load_range(app: App, metric: Metric, from: NaiveDate, to: NaiveDate) -> Vec<Measurement> {
+pub async fn load_range(
+    app: App,
+    metric: Metric,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Vec<Measurement> {
     let tz = app.tz_untracked();
     let a = time::day_start(from, &tz) - DAY_MS;
     let b = time::day_start(to, &tz) + 2 * DAY_MS;
-    let ms = repo::measurements(app.db.get_untracked(), Some(metric), a, b).await.unwrap_or_default();
+    let ms = repo::measurements(app.db.get_untracked(), Some(metric), a, b)
+        .await
+        .unwrap_or_default();
     ms.into_iter()
         .filter(|m| m.is_active())
         .filter(|m| {

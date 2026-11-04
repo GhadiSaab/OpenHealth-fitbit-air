@@ -14,6 +14,7 @@ pub mod demo;
 pub mod import;
 pub mod insights;
 pub mod journal;
+pub mod live_ingest;
 pub mod model;
 pub mod providers;
 pub mod series;

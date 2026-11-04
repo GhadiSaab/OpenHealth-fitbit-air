@@ -23,6 +23,7 @@ pub fn Today() -> impl IntoView {
         <DemoBanner />
         <DateNav />
         <StatusStrip />
+        <LiveReadings />
         {move || {
             let empty = app.summaries.with(|s| s.is_empty());
             if empty {
@@ -96,9 +97,15 @@ fn StatusStrip() -> impl IntoView {
         match (app.db.get(), app.demo_device.get()) {
             (DbKind::Demo, Some(d)) => (
                 "warn",
-                format!("Demo device · disconnected {} · not recording", time::fmt_ago(d.disconnected_at, now)),
+                format!(
+                    "Demo device · disconnected {} · not recording",
+                    time::fmt_ago(d.disconnected_at, now)
+                ),
             ),
-            _ => ("off", "Not connected · showing imported history".to_string()),
+            _ => (
+                if app.live_connected() { "ok" } else { "off" },
+                app.live_text(),
+            ),
         }
     };
     view! {
@@ -119,7 +126,11 @@ fn DaySummaryText() -> impl IntoView {
         let s = app.settings.get();
         app.summaries.with(|idx| {
             let mut parts = vec![];
-            let lead = if day == today { "So far today".to_string() } else { format!("On {}", day.format("%A")) };
+            let lead = if day == today {
+                "So far today".to_string()
+            } else {
+                format!("On {}", day.format("%A"))
+            };
             match idx.value(Metric::Steps, day) {
                 Some(v) => parts.push(format!(
                     "{lead} you took {} ({:.0}% of your goal)",
@@ -132,12 +143,18 @@ fn DaySummaryText() -> impl IntoView {
                 parts.push(format!("you slept {}", time::fmt_minutes(v)));
             }
             if let Some(v) = idx.value(Metric::RestingHeartRate, day) {
-                parts.push(format!("resting heart rate was {}", format::value(Metric::RestingHeartRate, v, &s)));
+                parts.push(format!(
+                    "resting heart rate was {}",
+                    format::value(Metric::RestingHeartRate, v, &s)
+                ));
             }
             let mut out = parts.join(", ");
             out.push('.');
             if !Metric::ALL.iter().any(|m| idx.get(*m, day).is_some()) {
-                out = format!("Nothing was recorded on {}. Missing days are shown as gaps.", day_short(day));
+                out = format!(
+                    "Nothing was recorded on {}. Missing days are shown as gaps.",
+                    day_short(day)
+                );
             }
             out
         })
@@ -184,7 +201,10 @@ fn StepsHero() -> impl IntoView {
 #[component]
 fn HeartTile() -> impl IntoView {
     let app = use_app();
-    let samples = async_signal(move || (app.db.get(), app.day.get(), app.data_rev.get()), move |(_, d, _)| load_range(app, Metric::HeartRate, d, d));
+    let samples = async_signal(
+        move || (app.db.get(), app.day.get(), app.data_rev.get()),
+        move |(_, d, _)| load_range(app, Metric::HeartRate, d, d),
+    );
     view! {
         <button class="tile tone-heart" on:click=move |_| app.go(Route::Metric(Metric::HeartRate, Range::Day))>
             <span class="tile-label"><Icon name="heart" size=18 />"Heart rate"</span>
@@ -197,7 +217,7 @@ fn HeartTile() -> impl IntoView {
                         None => view! { <span class="tile-value muted">"—"</span><span class="tile-sub">"No readings this day"</span> }.into_any(),
                         Some(last) => {
                             let live = last.prov.origin == Origin::BluetoothLive;
-                            let f = freshness(last.start, now, live, false);
+                            let f = freshness(last.start, now, live, app.live_connected());
                             let (pill, cls) = match f {
                                 Freshness::Live => ("Live".to_string(), "live"),
                                 Freshness::Recent => (format!("Recent · {}", time::fmt_ago(last.start, now)), "recent"),
@@ -294,8 +314,14 @@ fn PairTiles() -> impl IntoView {
 
 fn calorie_scope_label(extra: &Option<SummaryExtra>) -> &'static str {
     match extra {
-        Some(SummaryExtra::Additive { calorie_scope: Some(airspace_core::CalorieScope::Total), .. }) => "Total, incl. resting",
-        Some(SummaryExtra::Additive { calorie_scope: Some(airspace_core::CalorieScope::Active), .. }) => "Active only",
+        Some(SummaryExtra::Additive {
+            calorie_scope: Some(airspace_core::CalorieScope::Total),
+            ..
+        }) => "Total, incl. resting",
+        Some(SummaryExtra::Additive {
+            calorie_scope: Some(airspace_core::CalorieScope::Active),
+            ..
+        }) => "Active only",
         _ => "Type not specified by source",
     }
 }
@@ -303,7 +329,11 @@ fn calorie_scope_label(extra: &Option<SummaryExtra>) -> &'static str {
 #[component]
 fn Trends() -> impl IntoView {
     let app = use_app();
-    let rows = [(Metric::Steps, "activity"), (Metric::Sleep, "sleep"), (Metric::RestingHeartRate, "heart")];
+    let rows = [
+        (Metric::Steps, "activity"),
+        (Metric::Sleep, "sleep"),
+        (Metric::RestingHeartRate, "heart"),
+    ];
     view! {
         <Section title="Trends">
             <ul class="trend-list">
@@ -379,7 +409,8 @@ fn FavoriteTiles() -> impl IntoView {
     move || {
         let favs = app.settings.with(|s| s.favorites.clone());
         if favs.is_empty() {
-            return view! { <p class="muted">"Choose metrics to pin here with Edit."</p> }.into_any();
+            return view! { <p class="muted">"Choose metrics to pin here with Edit."</p> }
+                .into_any();
         }
         view! {
             <div class="fav-grid">
@@ -407,5 +438,44 @@ fn FavoriteTiles() -> impl IntoView {
                 }).collect_view()}
             </div>
         }.into_any()
+    }
+}
+
+/// Native counter snapshots are distinct from sums of observed increments.
+#[component]
+pub fn LiveReadings() -> impl IntoView {
+    let app = use_app();
+    move || {
+        if app.db.get() != DbKind::Personal || !crate::platform::is_android() {
+            return ().into_any();
+        }
+        let snapshot = app.live.get();
+        let raw = &snapshot["last_reading"];
+        let Some(received) = raw["received_at"].as_i64() else {
+            return ().into_any();
+        };
+        let age = crate::platform::now_ms().saturating_sub(received);
+        let current = snapshot["recording"] == true && age < 10_000;
+        let fields = &raw["fields"];
+        let mut values = vec![];
+        for (field, title, suffix, divisor) in [
+            ("7", "Heart rate", " bpm", 1.0),
+            ("2", "Tracker step counter", " steps", 1.0),
+            ("3", "Tracker distance counter", " m", 1000.0),
+            ("4", "Calories (provisional)", " kcal", 1.0),
+        ] {
+            if let Some(n) = fields[field].as_f64() {
+                if field == "7" && !(25.0..=250.0).contains(&n) {
+                    continue;
+                }
+                values.push((title, format!("{:.0}{}", n / divisor, suffix)));
+            }
+        }
+        view!{<section class="section" aria-label="Direct Bluetooth readings">
+   <h2>{if current{"Live from your Air"}else{"Last Bluetooth reading"}}</h2>
+   <p class="muted">{format!("{} · {} saved readings",time::format_ts(received,&app.tz(),"%H:%M:%S"),snapshot["samples"].as_u64().unwrap_or(0))}</p>
+   <div class="today-grid">{values.into_iter().map(|(title,value)|view!{<div class="tile"><span class="tile-label">{title}</span><span class="tile-value tabular">{value}</span></div>}).collect_view()}</div>
+   <p class="fineprint">"Counters are device snapshots; they are never summed. Sleep and advanced metrics require historical import."</p>
+  </section>}.into_any()
     }
 }
