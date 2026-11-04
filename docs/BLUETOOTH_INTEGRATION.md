@@ -3,6 +3,11 @@
 This build contains **no Bluetooth code and no Fitbit protocol**. It defines
 the contract and the UI states a future implementation plugs into.
 
+For the repository-specific connection design, protocol evidence, native
+service/persistence architecture and staged device-validation gates, see
+[Direct Fitbit Air recording design](superpowers/specs/2026-11-04-direct-bluetooth-design.md).
+That document is a proposal; it does not enable Bluetooth in this build.
+
 ## What is known, and what isn't
 
 * A separate client demonstrated live **heart rate, steps, distance and
