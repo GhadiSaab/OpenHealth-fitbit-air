@@ -327,9 +327,8 @@ pub fn generate(end_day: NaiveDate, tz: &Tz, now: i64) -> DemoDataset {
                 b.push(Metric::Calories, SampleKind::CumulativeCounter, read_at, None, (counter * 0.045).round(), Some(Detail::Calories { scope: CalorieScope::Unspecified }), Origin::BluetoothLive, LIVE_SOURCE, true);
             } else if !in_charge {
                 b.push(Metric::Steps, SampleKind::Interval, q, Some(qe), steps, None, Origin::HistoryImport, HISTORY_SOURCE, false);
-                if steps > 0.0 {
-                    b.push(Metric::Distance, SampleKind::Interval, q, Some(qe), (steps * stride).round(), None, Origin::HistoryImport, HISTORY_SOURCE, false);
-                }
+                // Zero intervals too, so distance has the same coverage as steps.
+                b.push(Metric::Distance, SampleKind::Interval, q, Some(qe), (steps * stride).round(), None, Origin::HistoryImport, HISTORY_SOURCE, false);
                 step_total += steps;
             }
             q = qe;

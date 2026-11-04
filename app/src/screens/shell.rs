@@ -74,7 +74,12 @@ pub fn Shell() -> impl IntoView {
             set_timeout(|| platform::focus_selector(".detail-controls [role=radio][aria-checked=true]"), std::time::Duration::from_millis(30));
         } else if r == Route::Explore && matches!(prev, Some(Route::Metric(..))) {
             let y = platform::with_scroll_memory(|m| m.0);
-            set_timeout(move || platform::window().scroll_to_with_x_and_y(0.0, y), std::time::Duration::from_millis(60));
+            // Back on the list: restore the scroll and put focus on the row you opened.
+            let sel = match prev { Some(Route::Metric(m, _)) => format!(".metric-row[data-metric={}]", m.key()), _ => String::new() };
+            set_timeout(move || {
+                platform::window().scroll_to_with_x_and_y(0.0, y);
+                platform::focus_selector_no_scroll(&sel);
+            }, std::time::Duration::from_millis(60));
         } else {
             platform::scroll_top();
             // Move focus to the new screen's heading for screen-reader users.

@@ -70,15 +70,44 @@ fn x_labels(pts: &[Pt], w: f64, h: f64, left: f64, pos: impl Fn(usize) -> f64) -
     let named = pts.iter().filter(|p| !p.tick.is_empty()).count();
     let every = if named <= 14 { 1 } else { ((n as f64) / 7.0).ceil().max(1.0) as usize };
     let _ = h;
-    pts.iter()
+    let items = pts
+        .iter()
         .enumerate()
         .filter(|(i, p)| !p.tick.is_empty() && (every == 1 || (n - 1 - i) % every == 0))
-        .map(|(i, p)| {
-            let x = pos(i);
-            let anchor = if x > w - 14.0 { "end" } else if x < left + 10.0 { "start" } else { "middle" };
-            (x, anchor, p.tick.clone())
-        })
-        .collect()
+        .map(|(i, p)| (pos(i), p.tick.clone()))
+        .collect();
+    fit_labels(items, w, left)
+}
+
+/// Approximate width of a 12 px axis label.
+fn label_width(s: &str) -> f64 {
+    s.chars().count() as f64 * 7.0
+}
+
+/// Anchors labels inwards at the edges and drops any that would collide,
+/// keeping the latest (rightmost) label and working leftwards, so labels
+/// never overlap or run off the card at any width.
+fn fit_labels(mut items: Vec<(f64, String)>, w: f64, left: f64) -> Vec<(f64, &'static str, String)> {
+    items.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut out: Vec<(f64, &'static str, String)> = vec![];
+    let mut min_x = f64::INFINITY;
+    for (x, t) in items.into_iter().rev() {
+        let lw = label_width(&t);
+        let (anchor, x0, x1) = if x + lw / 2.0 > w - 2.0 {
+            ("end", x - lw, x)
+        } else if x - lw / 2.0 < left - 4.0 {
+            ("start", x, x + lw)
+        } else {
+            ("middle", x - lw / 2.0, x + lw / 2.0)
+        };
+        if x1 + 8.0 > min_x {
+            continue;
+        }
+        min_x = x0;
+        out.push((x, anchor, t));
+    }
+    out.reverse();
+    out
 }
 
 /// Path for an optional trend overlay (e.g. a 7-day rolling average),
@@ -562,13 +591,9 @@ pub fn IntradayChart(
             .collect_view()
             .into_any()
     };
-    let xlabels = hour_labels
-        .iter()
-        .map(|(t, l)| {
-            let xx = x(*t);
-            let anchor = if xx > w - 20.0 { "end" } else if xx < left + 12.0 { "start" } else { "middle" };
-            view! { <text x=format!("{:.1}", xx) y=format!("{}", h - 6.0) class="tick" text-anchor=anchor>{l.clone()}</text> }
-        })
+    let xlabels = fit_labels(hour_labels.iter().map(|(t, l)| (x(*t), l.clone())).collect(), w, left)
+        .into_iter()
+        .map(|(xx, anchor, l)| view! { <text x=format!("{:.1}", xx) y=format!("{}", h - 6.0) class="tick" text-anchor=anchor>{l}</text> })
         .collect_view();
     let pts: Arc<Vec<Pt>> = Arc::new(
         buckets.iter().map(|b| Pt { label: b.label.clone(), v: Some(b.avg), text: b.text.clone(), ..Default::default() }).collect(),
@@ -683,9 +708,9 @@ pub fn SleepTimeline(
             }
         })
         .collect_view();
-    let xl = labels
-        .iter()
-        .map(|(t, l)| view! { <text x=format!("{:.1}", x(*t)) y=format!("{}", h - 6.0) class="tick" text-anchor="middle">{l.clone()}</text> })
+    let xl = fit_labels(labels.iter().map(|(t, l)| (x(*t), l.clone())).collect(), w, left)
+        .into_iter()
+        .map(|(xx, anchor, l)| view! { <text x=format!("{:.1}", xx) y=format!("{}", h - 6.0) class="tick" text-anchor=anchor>{l}</text> })
         .collect_view();
     let n = segs.len();
     let segs = Arc::new(segs);
@@ -729,7 +754,8 @@ pub fn SleepTimeline(
                 tabindex="0"
                 aria-label=summary.clone()
                 on:keydown=on_key(n, sel)
-                on:pointerdown=pick
+                on:pointerdown=pick.clone()
+                on:pointermove=move |ev: leptos::ev::PointerEvent| if ev.buttons() != 0 || ev.pointer_type() == "touch" { pick(ev) }
             >
                 {rows}
                 {rects}

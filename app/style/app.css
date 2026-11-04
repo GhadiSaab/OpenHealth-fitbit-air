@@ -263,7 +263,8 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 @media (min-width: 520px) { .metric-row .sparkline { display: block; } }
 .detail-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3); margin: var(--s2) 0 var(--s4); }
 .period-nav { display: flex; align-items: center; gap: var(--s1); }
-.period-label { font-weight: 650; min-width: 9em; text-align: center; }
+.period-label { font-weight: 650; min-width: 0; flex: 1; text-align: center; overflow-wrap: anywhere; }
+.period-nav { min-width: 0; max-width: 100%; }
 .detail-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--s4); }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s3); margin: 0; }
 .stat-grid div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s3) var(--s4); }
@@ -309,7 +310,7 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .select-band { fill: var(--ink); opacity: .05; }
 .goal-line { stroke: var(--ink-2); stroke-width: 1.5; }
 .goal-label { fill: var(--ink-2); }
-.gap-band { fill: var(--surface-2); }
+.gap-band { fill: var(--gap-band); }
 .gap-label { fill: var(--muted); font-size: 11px; }
 .stage { opacity: .95; }
 .stage-focus { fill: none; stroke: var(--ink); stroke-width: 2; }
@@ -327,7 +328,7 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; }
 .cal-head h2 { font-size: var(--fs-lg); }
 .cal-grid { display: grid; gap: 2px; margin-top: var(--s2); }
-.cal-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .cal-dow { text-align: center; font-size: var(--fs-xs); color: var(--muted); font-weight: 600; padding: var(--s1) 0; }
 .cal-day { min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; background: transparent; border-radius: var(--r-sm); font-weight: 600; }
 .cal-day:hover { background: var(--surface-2); }
@@ -351,7 +352,7 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 /* ---- Coach ---------------------------------------------------------- */
 .insight-list { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--s3); }
 .insight { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--s4); display: grid; gap: var(--s2); }
-.insight-head { display: flex; align-items: center; gap: var(--s3); }
+.insight-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
 .insight-head h3 { font-size: var(--fs-md); flex: 1; }
 .trend-arrow { font-weight: 700; color: var(--ink-2); }
 .ai-status { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); font-weight: 600; }
@@ -468,6 +469,8 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 @media (min-width: 600px) {
   .tile.hero { justify-content: flex-start; }
   .mini-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s2); margin-left: auto; align-items: end; height: 96px; min-width: 220px; position: relative; }
+  /* Only when the card itself is wide enough (not the viewport: the landscape rail narrows it). */
+  @container hero (max-width: 540px) { .mini-bars { display: none; } }
   .mini-bar { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
   .mini-bar span:first-child { width: 14px; border-radius: 4px 4px 0 0; background: var(--tone); opacity: .85; }
   .mini-bar.today span:first-child { opacity: 1; }
@@ -517,8 +520,13 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 
 /* ---- Mobile refinements ---------------------------------------------- */
 /* Values never break mid-number; long ones shrink a little on narrow phones. */
-.tile-value { white-space: nowrap; font-size: clamp(1.375rem, 7vw, 2rem); }
-.hero-value { white-space: nowrap; }
+.tile-value { font-size: clamp(1.375rem, 7vw, 2rem); max-width: 100%; }
+.tile, .hero-text, .insight, .insight-head h3, .metric-row > * { min-width: 0; }
+/* Large text (Android font scaling, browser zoom): tiles drop to one column
+   instead of clipping values. rem tracks the user's text size. */
+.today-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); }
+.tile.hero { flex-wrap: wrap; }
+.hero-text { min-width: 0; }
 .pill { border-radius: var(--r-sm); white-space: normal; max-width: 100%; }
 @media (max-width: 360px) {
   .tile.hero { gap: var(--s3); }
@@ -540,9 +548,9 @@ fieldset { border: 0; padding: 0; margin: var(--s3) 0; min-width: 0; }
 .trend-pill { font-size: var(--fs-xs); font-weight: 650; padding: 2px var(--s2); border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
 /* Compact demo marker away from Today */
 .demo-banner.compact { padding: var(--s1) var(--s1) var(--s1) var(--s3); font-size: var(--fs-xs); border-radius: var(--r-pill); display: inline-flex; gap: var(--s2); }
-.demo-banner.compact .link { min-height: 40px; }
+.demo-banner.compact .link { min-height: 48px; }
 /* AI form */
-.field-error { color: var(--danger); font-size: var(--fs-sm); font-weight: 550; margin-top: var(--s1); }
+.field-error { color: var(--danger); font-size: var(--fs-sm); font-weight: 550; margin: calc(-1 * var(--s2)) 0 var(--s3); }
 input[aria-invalid="true"] { border-color: var(--danger); border-width: 2px; }
 .radio-card { position: relative; padding-left: calc(var(--s4) + 28px); }
 .radio-card::before { content: ""; position: absolute; left: var(--s4); top: 50%; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; border: 2px solid var(--control-border); background: var(--surface); }
@@ -553,3 +561,24 @@ input[aria-invalid="true"] { border-color: var(--danger); border-width: 2px; }
 .preboot-mark { width: 48px; height: 26px; border: 7px solid var(--activity); border-bottom: 0; border-radius: 26px 26px 0 0; }
 .hidden { display: none !important; }
 body:has(.app) .preboot { display: none; }
+
+.chart-empty { border: 1px dashed var(--line); border-radius: 16px; padding: 24px 16px; text-align: center; margin: 8px 0; }
+.chart-empty-title { font-weight: 600; margin: 0 0 4px; }
+.chart-empty .muted { margin: 0; }
+.insight p, .metric-name, .metric-when { overflow-wrap: anywhere; }
+
+/* ---- Large text (Android font scale / zoom up to 200%) ----------------- */
+.tile.hero { container: hero / inline-size; }
+/* Segmented control: equal columns that wrap into two rows rather than overflow. */
+.segmented { flex-wrap: wrap; }
+.seg { flex: 1 1 auto; min-width: min(64px, 100%); padding: 0 var(--s3); }
+/* Tab labels are short, fixed words: cap their growth so four always fit. */
+.tab { font-size: min(var(--fs-xs), 17px); min-width: 0; }
+.tab .icon { flex: none; }
+.detail-controls > * { min-width: 0; max-width: 100%; }
+.metric-row { row-gap: 0; }
+.metric-value { overflow-wrap: anywhere; }
+/* Pills that may wrap at large text become rounded rectangles, not ovals:
+   the radius tracks the text size instead of being infinite. */
+.btn, .status-strip, .date-pick, .demo-banner.compact, .segmented { border-radius: min(var(--r-pill), 1.75em); }
+.seg { border-radius: min(var(--r-pill), 1.5em); }

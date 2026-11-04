@@ -167,6 +167,20 @@ pub fn focus_selector(sel: &str) {
     }
 }
 
+/// Focuses an element without scrolling the page to it.
+pub fn focus_selector_no_scroll(sel: &str) {
+    if sel.is_empty() {
+        return;
+    }
+    if let Some(el) = window().document().and_then(|d| d.query_selector(sel).ok().flatten()) {
+        if let Ok(h) = el.dyn_into::<web_sys::HtmlElement>() {
+            let opts = web_sys::FocusOptions::new();
+            opts.set_prevent_scroll(true);
+            let _ = h.focus_with_options(&opts);
+        }
+    }
+}
+
 pub fn scroll_into_view(sel: &str) {
     if let Some(el) = window().document().and_then(|d| d.query_selector(sel).ok().flatten()) {
         let opts = web_sys::ScrollIntoViewOptions::new();

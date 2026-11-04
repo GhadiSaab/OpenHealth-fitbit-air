@@ -59,8 +59,9 @@ No feature pretends to work: unavailable adapters say what is missing.
 
 ## Verification status
 
-* **Rust tests** (`cargo test -p airspace-core -p airspace-tauri`): 61 pass. They cover:
-  * aggregation, cumulative counters and resets (including steps that span midnight), naps, coverage,
+* **Rust tests** (`cargo test -p airspace-core -p airspace-tauri`): 63 pass. They cover:
+  * aggregation, cumulative counters and resets (including steps that span midnight or were recorded
+    in another time zone), naps, coverage,
     and overlap between imported history and live data;
   * daylight-saving days and overnight sleep;
   * import validation, duplicates and conflicts;
@@ -68,6 +69,8 @@ No feature pretends to work: unavailable adapters say what is missing.
   * AI request shapes and endpoint binding;
   * SQLite migrations and persistence after reopening;
   * a year of per-minute heart rate (about 525,000 samples), which summarizes in about 130 ms in release.
+* **Large text and small screens:** no horizontal overflow on any screen at 150% and 200% text on
+  320 px and 412 px phones and in landscape; tiles, controls and pills reflow instead of clipping.
 * **Browser test** (`scripts/e2e-smoke.cjs`, 33 checks) drives the PWA in headless Chromium. It passes, covering:
   * onboarding, offline reload after the first visit, an empty database, the demo, and persistence across reload;
   * charts with keyboard inspection and table view, and the journal;

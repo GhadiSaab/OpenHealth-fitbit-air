@@ -9,7 +9,7 @@ use airspace_core::aggregate::SummaryExtra;
 use airspace_core::bluetooth::{Freshness, freshness};
 use airspace_core::catalog;
 use airspace_core::insights::compare_periods;
-use airspace_core::time;
+use airspace_core::time::{self, HOUR_MS};
 use airspace_core::{DbKind, Metric, Origin};
 use chrono::Duration;
 use leptos::prelude::*;
@@ -215,7 +215,7 @@ fn HeartTile() -> impl IntoView {
                                 <span class="tile-value tabular">{format!("{}", last.value.round())}<small>"\u{a0}bpm"</small></span>
                                 <span class="tile-sub tabular">{format!("Measured at {}", time::format_ts(last.start, &tz, "%H:%M"))}</span>
                                 <span class=format!("pill {cls}")>{pill}</span>
-                                <span class="tile-sub tabular">{format!("Range {}–{}\u{a0}bpm", lo.round(), hi.round())}</span>
+                                <span class="tile-sub tabular">{format!("Range {}\u{2060}–\u{2060}{}\u{a0}bpm", lo.round(), hi.round())}</span>
                             }.into_any()
                         }
                     },
@@ -291,10 +291,20 @@ fn PairTiles() -> impl IntoView {
                     match app.summaries.with(|i| i.get(m, d).cloned()) {
                         Some(sm) if sm.value.is_some() => {
                             let partial = d == app.today();
-                            let sub = match (partial, sm.provisional, m) {
-                                (true, true, _) => "So far today · live estimate".to_string(),
-                                (true, false, _) => "So far today".to_string(),
-                                (false, _, Metric::Calories) => calorie_scope_label(&sm.extra).to_string(),
+                            let tz = app.tz();
+                            // Say plainly when the value covers only part of the day.
+                            let since = match &sm.extra {
+                                Some(SummaryExtra::Additive { parts, .. }) => parts.iter().map(|p| p.from).min(),
+                                _ => None,
+                            }
+                            .filter(|t| *t - time::day_start(d, &tz) > HOUR_MS);
+                            let low = sm.coverage.map(|c| c < 0.9).unwrap_or(false);
+                            let live = if sm.provisional { " · live estimate" } else { "" };
+                            let sub = match (partial, since, low, m) {
+                                (true, Some(t), _, _) => format!("Only since {}{live}", time::format_ts(t, &tz, "%H:%M")),
+                                (true, None, _, _) => format!("So far today{live}"),
+                                (false, _, true, _) => format!("{:.0}% of day recorded", sm.coverage.unwrap_or(0.0) * 100.0),
+                                (false, _, false, Metric::Calories) => calorie_scope_label(&sm.extra).to_string(),
                                 _ => String::new(),
                             };
                             view! {

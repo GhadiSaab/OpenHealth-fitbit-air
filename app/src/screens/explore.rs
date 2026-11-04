@@ -40,7 +40,7 @@ pub fn Explore() -> impl IntoView {
                         let m = *m;
                         let info = catalog::info(m);
                         view! {
-                            <button class=format!("metric-row tone-{}", info.tone.css()) on:click=move |_| {
+                            <button class=format!("metric-row tone-{}", info.tone.css()) data-metric=m.key() on:click=move |_| {
                                 app.go(Route::Metric(m, if info.has_intraday { Range::Day } else { Range::Week }))
                             }>
                                 <span class="metric-icon"><Icon name=metric_icon(m) /></span>
@@ -316,6 +316,14 @@ fn PeriodView(metric: Metric, range: Range, from: NaiveDate, to: NaiveDate, show
             let p = pts();
             let t = title.clone();
             let tr = trend();
+            if p.iter().all(|x| x.v.is_none()) {
+                return view! {
+                    <div class="chart-empty" role="note">
+                        <p class="chart-empty-title">"No data in this period"</p>
+                        <p class="muted">{format!("Nothing was recorded for {}. Missing days are left empty, never counted as zero.", period_label(range, from, to))}</p>
+                    </div>
+                }.into_any();
+            }
             match info.daily_chart {
                 DailyChart::Bars => view! { <BarChart pts=p tone=tone title=t goal=goal() width=width() trend=tr /> }.into_any(),
                 DailyChart::Line | DailyChart::RangeLine => view! { <LineChart pts=p tone=tone title=t width=width() trend=tr cap=(metric == Metric::Spo2).then_some(100.0) /> }.into_any(),
@@ -323,9 +331,10 @@ fn PeriodView(metric: Metric, range: Range, from: NaiveDate, to: NaiveDate, show
             }
         }}
         <div class="chart-foot">
-            <span class="muted">{move || format!("Values in {}. Rings under the axis mark days with no data; lighter bars are today so far.", display_unit(metric, &app.settings.get()))}
+            <span class="muted">{move || (!pts().iter().all(|x| x.v.is_none())).then(|| view! {
+                {format!("Values in {}. Rings under the axis mark days with no data{}", display_unit(metric, &app.settings.get()), if info.daily_chart == DailyChart::Bars { "; lighter bars are today so far." } else { "." })}
                 {(range == Range::Month).then(|| view! { " " <span class="legend-trend">"7-day average"</span> })}
-            </span>
+            })}</span>
             <button class="link" aria-expanded=move || if show_table.get() { "true" } else { "false" } on:click=move |_| show_table.update(|v| *v = !*v)>
                 <Icon name="table" size=18 />{move || if show_table.get() { "Hide table" } else { "Show table" }}
             </button>
@@ -427,7 +436,7 @@ fn hr_day(app: &App, ms: &Arc<Vec<Measurement>>, day: NaiveDate, width: f64, sho
             min: b.min,
             max: b.max,
             label: format!("{}–{}", time::format_ts(b.t0, &tz2, "%H:%M"), time::format_ts(b.t1, &tz2, "%H:%M")),
-            text: if b.n > 1 { format!("{:.0} bpm avg · {:.0}–{:.0}", b.avg, b.min, b.max) } else { format!("{:.0} bpm", b.avg) },
+            text: if b.n > 1 { format!("{:.0}\u{a0}bpm avg · {:.0}\u{2060}–\u{2060}{:.0}", b.avg, b.min, b.max) } else { format!("{:.0} bpm", b.avg) },
         })
         .collect();
     let gap_total: i64 = gaps.iter().map(|(a, b)| b - a).sum();
@@ -435,7 +444,7 @@ fn hr_day(app: &App, ms: &Arc<Vec<Measurement>>, day: NaiveDate, width: f64, sho
     let rows: Vec<Vec<String>> = buckets.iter().map(|b| vec![b.label.clone(), b.text.clone()]).collect();
     let gaps_txt: Vec<String> = gaps.iter().map(|(a, b)| format!("{}–{}", time::format_ts(*a, &tz, "%H:%M"), time::format_ts(*b, &tz, "%H:%M"))).collect();
     view! {
-        <IntradayChart buckets=buckets gaps=gaps.clone() from=from to=to tone="heart" title=format!("Heart rate on {}", day_short(day)) hour_labels=hour_labels(app, day) width=width max_gap=threshold />
+        <IntradayChart buckets=buckets gaps=gaps.clone() gap_labels=gaps_txt.clone() from=from to=to tone="heart" title=format!("Heart rate on {}", day_short(day)) hour_labels=hour_labels(app, day) width=width max_gap=threshold />
         <p class="chart-note muted">
             {format!("{} samples, shown as {}-minute averages with the min–max range. ", ms.len(), width_ms / MINUTE_MS)}
             {if gaps.is_empty() { "No recording gaps.".to_string() } else { format!("{} without recording ({}).", time::fmt_minutes((gap_total / MINUTE_MS) as f64), gaps_txt.join(", ")) }}
@@ -804,8 +813,8 @@ fn MetricExtras(metric: Metric, range: Range) -> impl IntoView {
                         <dl class="stat-grid">
                             <div><dt>"Typical sleep start"</dt><dd class="tabular">{fmt_clock(cb)}</dd></div>
                             <div><dt>"Typical wake"</dt><dd class="tabular">{fmt_clock(cw)}</dd></div>
-                            <div><dt>"Start varies by"</dt><dd class="tabular">{format!("±{:.0} min", sdb)}</dd></div>
-                            <div><dt>"Wake varies by"</dt><dd class="tabular">{format!("±{:.0} min", sdw)}</dd></div>
+                            <div><dt>"Start varies by"</dt><dd class="tabular">{format!("±{:.0}\u{a0}min", sdb)}</dd></div>
+                            <div><dt>"Wake varies by"</dt><dd class="tabular">{format!("±{:.0}\u{a0}min", sdw)}</dd></div>
                         </dl>
                         {(!stage.is_empty()).then(|| view! {
                             <p class="muted">"Average minutes per stage on nights with stage data (calculated):"</p>
@@ -872,7 +881,7 @@ fn MetricExtras(metric: Metric, range: Range) -> impl IntoView {
                         vec![
                             airspace_core::HrZone::parse(k).map(|z| z.label()).unwrap_or(k).to_string(),
                             mins.get(*k).map(|m| time::fmt_minutes(*m)).unwrap_or_else(|| "Not provided".into()),
-                            match (lo, hi) { (Some(a), Some(b)) => format!("{a:.0}–{b:.0} bpm"), _ => "Not provided".into() },
+                            match (lo, hi) { (Some(a), Some(b)) => format!("{a:.0}\u{2060}–\u{2060}{b:.0}\u{a0}bpm"), _ => "Not provided".into() },
                         ]
                     })
                     .collect();

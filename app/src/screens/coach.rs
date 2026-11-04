@@ -439,8 +439,8 @@ pub fn AiSettings() -> impl IntoView {
             <label class="field"><span class="field-label">"HTTPS endpoint"</span>
                 <input type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://api.example.com/v1"
                     aria-invalid=move || endpoint_error().is_some().then_some("true") aria-describedby="endpoint-error"
-                    prop:value=move || endpoint.get() on:input=move |ev| endpoint.set(event_target_value(&ev)) />
-                {move || endpoint_error().map(|e| view! { <span class="field-error" id="endpoint-error">{e}</span> })}</label>
+                    prop:value=move || endpoint.get() on:input=move |ev| endpoint.set(event_target_value(&ev)) /></label>
+            {move || endpoint_error().map(|e| view! { <p class="field-error" id="endpoint-error">{e}</p> })}
             <label class="field"><span class="field-label">"Model"</span>
                 <input type="text" autocomplete="off" spellcheck="false" list="model-suggestions" prop:value=move || model.get() on:input=move |ev| model.set(event_target_value(&ev)) /></label>
             <datalist id="model-suggestions">

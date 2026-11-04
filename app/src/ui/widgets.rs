@@ -334,14 +334,21 @@ pub fn ToastHost() -> impl IntoView {
         }
     });
     view! {
-        <div class="toast-region" role="status" aria-live="polite">
-            {move || app.toast.get().map(|t| view! {
-                <div class="toast" class:error=t.error role=t.error.then_some("alert")>
-                    <Icon name=if t.error { "alert" } else { "check" } />
-                    <span>{t.message}</span>
-                    <button class="icon-btn small" aria-label="Dismiss" on:click=move |_| app.toast.set(None)><Icon name="close" size=18 /></button>
-                </div>
-            })}
+        // Two separate live regions, so an error is announced once (assertively)
+        // and an ordinary confirmation once (politely).
+        <div class="toast-region">
+            <div role="status" aria-live="polite">{move || app.toast.get().filter(|t| !t.error).map(|t| toast_view(app, t))}</div>
+            <div role="alert">{move || app.toast.get().filter(|t| t.error).map(|t| toast_view(app, t))}</div>
+        </div>
+    }
+}
+
+fn toast_view(app: App, t: crate::state::Toast) -> impl IntoView {
+    view! {
+        <div class="toast" class:error=t.error>
+            <Icon name=if t.error { "alert" } else { "check" } />
+            <span>{t.message}</span>
+            <button class="icon-btn small" aria-label="Dismiss" on:click=move |_| app.toast.set(None)><Icon name="close" size=18 /></button>
         </div>
     }
 }

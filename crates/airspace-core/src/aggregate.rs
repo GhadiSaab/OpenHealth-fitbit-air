@@ -172,7 +172,21 @@ fn counter_context<'a>(series: &HashMap<CounterKey, Vec<&'a Measurement>>, metri
         if j < v.len() {
             out.push(v[j]);
         }
+        // Readings with their own recorded offset (e.g. while travelling) are assigned
+        // to days in that frame, so also take the neighbours of this day's own readings.
+        if let Some(f) = v.iter().position(|x| day_of(x, tz) == day) {
+            if f > 0 {
+                out.push(v[f - 1]);
+            }
+        }
+        if let Some(l) = v.iter().rposition(|x| day_of(x, tz) == day) {
+            if l + 1 < v.len() {
+                out.push(v[l + 1]);
+            }
+        }
     }
+    out.sort_by_key(|m| m.id.clone());
+    out.dedup_by(|a, b| a.id == b.id);
     out
 }
 
@@ -627,11 +641,14 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], contex
                 }
                 let mut prev: Option<&Measurement> = None;
                 for m in &g {
+                    // Day boundaries in the frame this reading was measured in, so an
+                    // increment is split at the same midnight that assigns it to a day.
+                    let (fs, fe) = time::day_bounds_in_frame(day, m.utc_offset_min, &ctx.tz);
                     let (a, inc) = match prev {
                         None => {
                             prev = Some(m);
-                            if resets_daily && m.start >= ds && m.start < de {
-                                (ds, m.value)
+                            if resets_daily && m.start >= fs && m.start < fe {
+                                (fs, m.value)
                             } else {
                                 continue;
                             }
@@ -642,7 +659,7 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], contex
                             if d < 0.0 {
                                 // A reset: the new reading counts from zero. Devices reset at
                                 // midnight, so never spread it back into an earlier day.
-                                (p.start.max(time::day_start(time::local_day(m.start, m.utc_offset_min, &ctx.tz), &ctx.tz)), m.value)
+                                (p.start.max(time::day_bounds_in_frame(time::local_day(m.start, m.utc_offset_min, &ctx.tz), m.utc_offset_min, &ctx.tz).0), m.value)
                             } else {
                                 (p.start, d)
                             }
@@ -655,7 +672,7 @@ fn additive_with(s: &mut DaySummary, day: NaiveDate, ms: &[&Measurement], contex
                         continue;
                     }
                     // The share of this increment inside the day, pro rata by time.
-                    let (ca, cb) = (a.max(ds), b.min(de));
+                    let (ca, cb) = (a.max(fs), b.min(fe));
                     if cb <= ca {
                         continue;
                     }
@@ -932,6 +949,45 @@ mod tests {
         let total: f64 = s.iter().filter_map(|x| x.value).sum();
         assert_eq!(s[0].value, Some(600.0));
         assert_eq!(total, 1000.0);
+    }
+
+    #[test]
+    fn counter_recorded_abroad_keeps_every_step() {
+        // Home zone New York; readings recorded at +09:00 (travelling in Tokyo),
+        // 11:00 to 14:00 local, which straddles midnight in New York.
+        let h = 3_600_000;
+        let ctx = SummaryContext { tz: parse_tz("America/New_York"), now: i64::MAX / 2, demo: false };
+        let items: Vec<Measurement> = [0.0, 1000.0, 2000.0, 3000.0]
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let mut x = m(Metric::Steps, SampleKind::CumulativeCounter, D0 + 2 * h + i as i64 * h, None, *v, Origin::HistoryImport);
+                x.utc_offset_min = Some(540);
+                x.id = measurement_id(&x);
+                x
+            })
+            .collect();
+        let total: f64 = summarize(&items, &ctx).iter().filter_map(|x| x.value).sum();
+        assert_eq!(total, 3000.0);
+    }
+
+    #[test]
+    fn counter_reset_with_offset_in_another_home_zone() {
+        // Readings at −04:00 with a reset; home zone Tokyo. Nothing may be lost.
+        let h = 3_600_000;
+        let ctx = SummaryContext { tz: parse_tz("Asia/Tokyo"), now: i64::MAX / 2, demo: false };
+        let base = D0 + 4 * h; // 00:00 at −04:00
+        let items: Vec<Measurement> = [(8, 5000.0), (10, 300.0), (20, 1300.0)]
+            .iter()
+            .map(|(hr, v)| {
+                let mut x = m(Metric::Steps, SampleKind::CumulativeCounter, base + hr * h, None, *v, Origin::HistoryImport);
+                x.utc_offset_min = Some(-240);
+                x.id = measurement_id(&x);
+                x
+            })
+            .collect();
+        let total: f64 = summarize(&items, &ctx).iter().filter_map(|x| x.value).sum();
+        assert_eq!(total, 1300.0);
     }
 
     #[test]

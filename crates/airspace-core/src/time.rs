@@ -51,6 +51,22 @@ pub fn day_bounds(day: NaiveDate, tz: &Tz) -> (i64, i64) {
     (day_start(day, tz), day_start(day.succ_opt().unwrap_or(day), tz))
 }
 
+/// `[start, end)` of a local day in the frame a record was measured in: its
+/// recorded UTC offset when known, otherwise the home zone. Matches the rule
+/// `local_day` uses to assign the record to a day.
+pub fn day_bounds_in_frame(day: NaiveDate, offset_min: Option<i32>, tz: &Tz) -> (i64, i64) {
+    match offset_min.and_then(|m| FixedOffset::east_opt(m * 60)) {
+        Some(off) => match off.from_local_datetime(&day.and_time(NaiveTime::MIN)) {
+            LocalResult::Single(dt) => {
+                let s = dt.timestamp_millis();
+                (s, s + DAY_MS)
+            }
+            _ => day_bounds(day, tz),
+        },
+        None => day_bounds(day, tz),
+    }
+}
+
 /// Local day of an instant in `tz`.
 pub fn local_day_in(ts: i64, tz: &Tz) -> NaiveDate {
     match DateTime::<Utc>::from_timestamp_millis(ts) {
