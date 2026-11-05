@@ -33,10 +33,14 @@ public final class AirService extends Service {
   private final ArrayDeque<Runnable> operations = new ArrayDeque<>();
   private boolean busy = false, linked = false, attemptHasReading = false;
   private int attempt = 0, generation = 0, segment = 0;
+  private int negotiatedMtu=23;
+  private boolean mtuPending=false;
   private String session;
   private long lastReceived = 0, pendingGap = 0;
   private PowerManager.WakeLock wake;
-  private final Runnable opTimeout = () -> retry("Bluetooth operation timed out");
+  private final Runnable opTimeout = () -> {
+    if(mtuPending){mtuPending=false;done();}else retry("Bluetooth operation timed out");
+  };
   private final Runnable timer =
       new Runnable() {
         public void run() {
@@ -262,6 +266,7 @@ public final class AirService extends Service {
       retry("Air protocol characteristics missing");
       return;
     }
+    enqueue(() -> {mtuPending=true;if(!gatt.requestMtu(247)){mtuPending=false;done();}});
     BluetoothGattCharacteristic cr = find(CACHE_READ), cw = find(CACHE_WRITE);
     if (cr != null)
       enqueue(() -> {
@@ -325,6 +330,7 @@ public final class AirService extends Service {
                   if (generation == gen) retry("Secure link disconnected");
                 }));
     try {
+      link.gl.setMtu(negotiatedMtu);
       link.start(
           credentials.getString("identity").getBytes("US-ASCII"),
           Base64.decode(credentials.getString("key"), 2));
@@ -345,6 +351,13 @@ public final class AirService extends Service {
           });
         }
 
+        public void onMtuChanged(BluetoothGatt g,int mtu,int code){
+          h.post(() -> {
+            if(g!=gatt)return;
+            if(code==0 && mtu>=23 && mtu<=517){negotiatedMtu=mtu;if(link!=null)link.gl.setMtu(mtu);}
+            if(mtuPending){mtuPending=false;done();}
+          });
+        }
         public void onServicesDiscovered(BluetoothGatt g, int code) {
           h.post(() -> {
             if (g != gatt) return;
@@ -445,9 +458,11 @@ public final class AirService extends Service {
     if (attemptHasReading && pendingGap == 0) pendingGap = lastReceived;
     attemptHasReading = false;
     generation++;
+    try{if(link!=null)status.put("last_transport",link.diagnostics());}catch(org.json.JSONException ignored){}
     stopScan();
     h.removeCallbacks(opTimeout);
     busy = false;
+    mtuPending=false;negotiatedMtu=23;
     operations.clear();
     BluetoothGatt old = gatt;
     gatt = null;

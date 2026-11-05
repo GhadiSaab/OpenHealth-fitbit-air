@@ -11,7 +11,11 @@ import org.bouncycastle.tls.*;
 final class AirSession implements DatagramTransport, AutoCloseable {
   final Gattlink gl;
   private volatile long ipInput=0,dtlsInput=0,dtlsOutput=0;
-  private volatile int lastType=0;
+  private volatile int lastType=0,lastCoapCode=-1;
+  private volatile boolean bootstrapIdentity=false;
+  private final java.util.concurrent.atomic.AtomicLong keyLookups=new java.util.concurrent.atomic.AtomicLong(),keyMatches=new java.util.concurrent.atomic.AtomicLong();
+  private final Deque<String> incomingTrace=new ArrayDeque<>(),outgoingTrace=new ArrayDeque<>();
+  private static synchronized void note(Deque<String> trace,byte[] packet){if(trace.size()>=8)trace.removeFirst();trace.addLast(DtlsTrace.describe(packet));}
   private final BlockingQueue<byte[]> input = new ArrayBlockingQueue<>(128);
   private final CountDownLatch ready = new CountDownLatch(1);
   private volatile boolean closed;
@@ -37,6 +41,7 @@ final class AirSession implements DatagramTransport, AutoCloseable {
                 ipInput++;
                 byte[] payload=AirWire.stripIpUdp(ip);
                 if(payload.length>0)lastType=payload[0]&255;
+                note(incomingTrace,payload);
                 if (!input.offer(payload)) abort();
               } catch (IllegalArgumentException e) {
                 abort();
@@ -55,7 +60,7 @@ final class AirSession implements DatagramTransport, AutoCloseable {
                 if (!ready.await(8, TimeUnit.SECONDS))
                   throw new IOException("Gattlink handshake timeout");
                 state.accept("authenticating");
-                DTLSTransport dtls = AirDtls.accept(this, identity, key);
+                DTLSTransport dtls = AirDtls.accept(this, identity, key,(name,value)->{if(name.equals("key_lookup"))keyLookups.incrementAndGet();else if(name.equals("key_match"))keyMatches.incrementAndGet();else if(name.equals("bootstrap"))bootstrapIdentity=true;});
                 state.accept("connected");
                 long last = System.currentTimeMillis();
                 CoapPoll polling = new CoapPoll();
@@ -72,6 +77,7 @@ final class AirSession implements DatagramTransport, AutoCloseable {
                     } catch (IllegalArgumentException bad) {
                       continue;
                     }
+                    lastCoapCode=c.code;
                     if (c.code >= 64 && c.type == 0) {
                       byte[] ack = AirWire.coap(0, c.mid, new byte[0], "", new byte[0], 2);
                       dtls.send(ack, 0, ack.length);
@@ -143,12 +149,16 @@ final class AirSession implements DatagramTransport, AutoCloseable {
   public void send(byte[] b, int off, int len) throws IOException {
     if (closed) throw new IOException("closed");
     dtlsOutput++;
-    gl.send(AirWire.ipUdp(Arrays.copyOfRange(b, off, off + len), ipId++ & 65535, true));
+    byte[] payload=Arrays.copyOfRange(b,off,off+len);note(outgoingTrace,payload);
+    gl.send(AirWire.ipUdp(payload, ipId++ & 65535, true));
   }
 
   org.json.JSONObject diagnostics(){
     org.json.JSONObject o=new org.json.JSONObject();
-    try{o.put("ip_input",ipInput).put("dtls_input",dtlsInput).put("dtls_output",dtlsOutput).put("last_record_type",lastType).put("thread",thread==null?"none":thread.getState().toString());}catch(org.json.JSONException ignored){}
+    try{o.put("ip_input",ipInput).put("dtls_input",dtlsInput).put("dtls_output",dtlsOutput).put("last_record_type",lastType).put("last_coap_code",lastCoapCode).put("thread",thread==null?"none":thread.getState().toString());}catch(org.json.JSONException ignored){}
+    try{o.put("bootstrap_identity",bootstrapIdentity).put("key_lookups",keyLookups.get()).put("key_matches",keyMatches.get()).put("gattlink",new org.json.JSONObject(gl.diagnostics()));
+      synchronized(AirSession.class){o.put("incoming",new org.json.JSONArray(incomingTrace));o.put("outgoing",new org.json.JSONArray(outgoingTrace));}
+    }catch(org.json.JSONException ignored){}
     return o;
   }
   private void abort() {

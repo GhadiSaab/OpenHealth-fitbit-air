@@ -1,14 +1,15 @@
 # Airspace
 
-> Native Bluetooth work is paused at the owner's request (2026-11-04).
-> The Pixel received live readings, but sustained DTLS connection reliability
-> remains unresolved. Read [RESUME.md](RESUME.md) for the exact state and next steps.
+> Native Android Bluetooth recording is implemented and was tested on a Pixel
+> on 2026-11-05, including screen-off recording and an explicit restart after a
+> Bluetooth interruption. Long-duration reliability is still unverified.
+> See [setup and limitations](docs/BLUETOOTH_INTEGRATION.md) and [handoff](RESUME.md).
 
 A private, local-first fitness companion for a Fitbit Air. Your data stays on
 your device: no account, no subscription, no analytics, and no network
 needed for anything except the optional AI coach.
 
-Airspace is written entirely in **Rust**:
+Airspace uses Rust for its UI and domain logic, with a native Android Bluetooth service:
 
 | Part | Technology | Where |
 |---|---|---|
@@ -16,6 +17,7 @@ Airspace is written entirely in **Rust**:
 | User interface | [Leptos](https://leptos.dev) 0.8 compiled to WebAssembly | `app/` |
 | Installable PWA | Same WebAssembly UI + service worker, IndexedDB storage | `app/dist` after `trunk build` |
 | Android app | [Tauri 2](https://v2.tauri.app) shell, SQLite (`rusqlite`), native HTTPS (`ureq`) | `src-tauri/` |
+| Bluetooth recording | Java/Kotlin foreground service, Gattlink, DTLS-PSK, CoAP | `crates/tauri-plugin-air` |
 | Secret storage | Small Tauri plugin: Android Keystore AES-GCM | `crates/tauri-plugin-vault` |
 
 ## What works, what's simulated, what's deferred
@@ -31,7 +33,7 @@ Airspace is written entirely in **Rust**:
 | Reminders (opt-in, Android only) | **Implemented** (Android path untested on a device) |
 | Haptics on meaningful actions (Android) | **Implemented** (untested on a device) |
 | 30-day demo dataset (every metric, missing day, charging gap, unstaged night, mixed HRV methods, disconnected live session) | **Simulated** — clearly marked, separate database |
-| Bluetooth live recording | **Deferred** — typed interface and UI states only; reports "Not connected" |
+| Bluetooth live recording | **Implemented on Android**, short Pixel test passed; requires existing device credentials; long-duration reliability unverified |
 | Google-backed history sync | **Deferred** — reports "Not connected" |
 | Offline decryption of tracker history | **Not attempted** (unsolved; see Bluetooth guide) |
 
@@ -45,10 +47,13 @@ No feature pretends to work: unavailable adapters say what is missing.
   persistence across reload; charts with keyboard inspection and table view; journal; Coach without AI; API key not
   stored or exported; backup export; import preview with rejected records; re-import detected as duplicates; dark theme;
   no console errors.
-* **The Android APK was not built or verified in this environment.** The Android SDK download host is blocked by the
-  sandbox's network policy. The Android Rust code for the Keystore plugin type-checks for `aarch64-linux-android`; the
-  rest is verified only on desktop targets. A GitHub Actions workflow that builds the debug APK is provided in
-  `ci/github-workflows/android.yml` (see below).
+* Android debug APK built, installed and tested on the owner's unrooted Pixel 10 Pro.
+  Direct private-key recording saved 85 additional readings / 340 normalized measurements
+  in two short sessions on November 5; one session continued with the screen off.
+  Bluetooth off is reported explicitly and requires Start after turning it back on.
+* `JAVA_HOME=/path/to/jdk python3 scripts/test-air-protocol.py` passes reset-contract,
+  CoAP, PSK identity rejection, and DTLS-over-Gattlink tests at ATT MTUs 23/247,
+  including injected packet loss. No real device key is used in these tests.
 
 ## Build and run
 

@@ -1,91 +1,52 @@
-# Resume: native Air Bluetooth, 2026-11-04
+# Resume: native Air Bluetooth, 2026-11-05
 
-**Paused at the owner's explicit request. No further experiments until asked.**
+## Current verified state
 
-## Where we stopped
+- Branch `codex/android-bluetooth`; final diagnostic build14 installed on the Pixel.
+- Device credentials remain imported and encrypted; no reimport is needed.
+- Final native recording accepts only the provisioned private PSK identity.
+- Fixed Golden Gate reset exchange: `80 -> 81 -> 81`. Peer resets invalidate
+  the old DTLS context. Added bounded control retries and asymmetric reference tests.
+- ATT MTU negotiation now controls fragment size; CoAP empty ACK waits for a
+  separate response without retransmitting the acknowledged request.
+- Header-only transport diagnostics expose counters, bootstrap classification
+  and response codes without keys, identities or health payloads.
+- November 5: initial 84 saved measurements became **424** after two private-key
+  sessions (59 + 26 readings, four normalized measurements per reading).
+  Session 1 continued with the screen off. Build14 session 2 reauthenticated and
+  resumed readings after Bluetooth off/on and explicit Start. Private key matched,
+  BOOTSTRAP false, CoAP 2.05 Content (69). Stop verified twice, count stayed 424.
+- This is a short test, not proof of 30-minute/all-day reliability.
+- Radio-free protocol suite passed: reference reset contract, CoAP, strict PSK
+  (including rejection of the known public bootstrap key), both CCM variants,
+  and DTLS-over-Gattlink at MTUs23/247 with packet loss and sequence wraparound.
+- Original Google Health package enabled state0, Nearby permissions and 30-second
+  screen timeout restored and checked. Airspace recording is stopped. Bluetooth on.
+- Last wireless ADB endpoint `192.168.1.172:38981`; may change on reconnect.
 
-- Repository: `/home/ghadi/perso/OpenHealth-fitbit-air`.
-- Branch: `codex/android-bluetooth`, based on `codex/direct-bluetooth-plan`.
-- The Android APK is installed and launches on the unrooted Pixel 10 Pro,
-  Android API 37, package `app.airspace.fitness`.
-- The owner key was imported with Android's document picker and encrypted in
-  Android Keystore-backed preferences. The temporary Downloads credential file
-  was deleted. Do not ask the owner to provision the same key again.
-- Direct reads really succeeded: one attempt saved **8 raw readings / 32
-  normalized personal-database measurements**, fields 1–10 present. No Google
-  history relay or new Google authorization was used.
-- The connection is **intermittent**. Other attempts complete GATT/cache setup
-  and Gattlink, then stall at DTLS authentication and reconnect. Do not call
-  sustained recording reliable or complete.
-- Stop was issued and verified: `state=disconnected`, `recording=false`;
-  **32 personal measurements remain saved**. The latest session had 0 samples;
-  its zero does not erase the earlier successful session's records.
-- Google Health (`com.fitbit.FitbitMobile`) was force-stopped to release BLE.
-  Pairing and app data were preserved. It has not been reopened automatically.
+## Remaining limitation / next focused work
 
-## Next investigation (start here)
+Google Health can contend for the Air link. Release its Bluetooth access while
+using Airspace. Some failed attempts presented BOOTSTRAP instead of the owner's
+private identity. A temporary public-key diagnostic completed encryption but
+could not read live data; public resolution was removed from the final build.
+Briefly allowing Google Health to refresh, then releasing its link, restored
+private-identity use once. No guarantee this workaround is always sufficient.
 
-1. Reconnect wireless ADB (last address `192.168.1.172:35309`; port may change).
-2. Read this handoff and the implementation ledger before changing anything.
-3. Start the installed app/service and inspect sanitized `transport` counters.
-   During a stalled attempt: `ip_input=2`, `dtls_input=2`, `dtls_output=6`,
-   `last_record_type=22`, thread `TIMED_WAITING`. Air sends handshake records
-   and the server responds; this is not simply failure to discover BLE.
-4. Diagnose why the DTLS flight sometimes fails to complete. Next useful
-   observation is Gattlink outstanding/pending/ACK counters and the TLS flight
-   stages, without logging keys or plaintext health packets. Validate against
-   Golden Gate's reference framing; do not guess cryptographic changes.
-5. Once repeatable, test background/screen-off, reconnect and Stop. These are
-   **not yet verified**. No 30-minute stable recording test has passed.
-6. Complete remaining CoAP empty-ACK handling: currently the poller preserves
-   token/MID and ACKs separate CON replies, but still retransmits a CON request
-   after an empty ACK while waiting for the separate response.
+Next: test a longer session and recovery from an ordinary BLE disconnect without
+turning off the phone's adapter; capture only sanitized failure metadata if it
+fails. Do not revisit disproven cipher/session-ID experiments or broaden key
+resolution. Account provisioning, renewal and Google-backed history are separate
+unimplemented work; never infer sleep, HRV, SpO2 or temperature from liveactivity.
 
-## Implemented
+## Local evidence and helpers
 
-- Native Tauri Android plugin: `crates/tauri-plugin-air`.
-- Kotlin permission/credential-picker bridge; Java foreground service, serialized
-  GATT, notification Stop, retry cancellation epochs, wake lock and durable spool.
-- Application-owned bounded Gattlink, IP/UDP, CoAP and protobuf code.
-- Bouncy Castle DTLS 1.2 PSK server: bctls 1.86.2, bcprov/bcutil 1.86.
-  Golden Gate's archived Android build was not imported. Initial CMake probe
-  lacked its external TLS sources; no claim it is impossible to modernize.
-- Strict provisioned PSK identity; no fallback for arbitrary identities.
-- `live_ingest.rs`: bounded values, metres conversion, timestamp fallback,
-  provisional mappings, session/link boundaries and replay IDs.
-- Native Rust spool ingestion: personal DB only, commit before acknowledge,
-  durable dirty-summary markers, lifecycle mutex shared with deletion.
-- Device controls and current-reading panel; browser/demo remain separate.
-
-## Verification already completed
-
-- Core suite: 47 unit + 1 existing integration + 7 live-ingestion tests = 55 pass.
-- JVM protocol tests pass: malformed inputs, duplicate/lost fragments, retransmit,
-  default ATT <=20-byte frames, late CoAP replies/token retention.
-- Synthetic DTLS PSK exchange passes; unknown identity rejected.
-- Two gap regressions failed before the fix (+10 invented steps), then passed.
-- Android Java and Rust compiled; debug APK build passed (deprecation warnings).
-- APK signature verified with apksigner's JAR (the downloaded shell launcher
-  references `/bin/bash`, absent here).
-- Complete existing PWA browser smoke test passed using system Chromium.
-- Independent code review fixes applied: ATT size, CoAP outstanding token,
-  Start/delete serialization and queued-start cancellation, counter boundaries,
-  per-attempt freshness. Hardware reliability remains unresolved.
-
-## Artifact and local evidence
-
-- Installed latest diagnostic APK:
-  `src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
-- SHA-256: `f59675f7942d3bacbc9c711d88129a5be9c8069181f2427644e6d5c4b91290f0`
-- `.tools/android-build-4.log`, `.tools/core-green.log`, `.tools/pwa-smoke.log`,
-  `.tools/pixel-connection-test.json` (first 40 s, before the later success).
-- `.tools/pixel-control.mjs` can query/start/stop through the app's WebView CDP.
-  It reconnects the ADB WebView forward using the current app PID; update the
-  device address there if necessary. Returns sanitized diagnostics and counts.
-- Local credential import source remains ignored under `secrets/` mode 700,
-  file mode 600. Never commit or print it.
-- Original research: `/home/ghadi/perso/fitbit-air-research`; keep untouched.
-- `.superpowers/sdd/2026-11-04-android-bluetooth/progress.md` is the local ledger.
+- `.tools/pixel-build13-*.json`, `.tools/pixel-build14-*.json`: sanitized test snapshots.
+- `.tools/protocol-final.log`, `.tools/android-build-14.log`.
+- `.tools/pixel-control.mjs`: own-app start/stop/status through WebView CDP.
+- `.tools/*restore.json`: original temporary phone settings; restore_required=false.
+- Credentials and tools remain ignored. Original research under
+  `/home/ghadi/perso/fitbit-air-research` was not modified.
 
 ## Build environment
 

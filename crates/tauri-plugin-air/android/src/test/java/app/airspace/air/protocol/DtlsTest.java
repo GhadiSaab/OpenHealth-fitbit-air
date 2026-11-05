@@ -46,13 +46,16 @@ public final class DtlsTest {
   }
 
   public static void main(String[] args) throws Exception {
-    for (boolean valid : new boolean[] {true, false}) {
+    for(int suite : new int[]{CipherSuite.TLS_PSK_WITH_AES_128_CCM_8,CipherSuite.TLS_PSK_WITH_AES_128_CCM}) {
+    for (int mode : new int[] {0,1,2}) {
+      boolean valid=mode==0;
       Pipe a = new Pipe(), b = new Pipe();
       a.other = b;
       b.other = a;
       byte[] id = "MD-00000001-00000002".getBytes("US-ASCII"), key = new byte[16];
       Arrays.fill(key, (byte) 7);
       ExecutorService ex = Executors.newSingleThreadExecutor();
+      try {
       Future<Boolean> server =
           ex.submit(() -> {
             try {
@@ -69,14 +72,14 @@ public final class DtlsTest {
         PSKTlsClient c =
             new PSKTlsClient(
                 new BcTlsCrypto(new SecureRandom()),
-                valid ? id : "wrong".getBytes("US-ASCII"),
-                key) {
+                mode==1 ? "BOOTSTRAP".getBytes("US-ASCII") : valid ? id : "wrong".getBytes("US-ASCII"),
+                mode==1 ? new byte[]{(byte)0x81,0x06,0x54,(byte)0xe3,0x36,(byte)0xad,(byte)0xca,(byte)0xb0,(byte)0xa0,0x3c,0x60,(byte)0xf7,0x4a,(byte)0xa0,(byte)0xb6,(byte)0xfb} : key) {
               protected ProtocolVersion[] getSupportedVersions() {
                 return new ProtocolVersion[] {ProtocolVersion.DTLSv12};
               }
 
               protected int[] getSupportedCipherSuites() {
-                return new int[] {CipherSuite.TLS_PSK_WITH_AES_128_CCM_8};
+                return new int[] {suite};
               }
 
               public int getHandshakeTimeoutMillis() {
@@ -90,10 +93,11 @@ public final class DtlsTest {
       }
       if (connected != valid || server.get(5, TimeUnit.SECONDS) != valid)
         throw new AssertionError("Strict PSK handshake failed");
-      a.close();
-      b.close();
-      ex.shutdownNow();
+      } finally {
+        a.close(); b.close(); ex.shutdownNow();
+      }
     }
-    System.out.println("DTLS 1.2 PSK interoperability and wrong-identity rejection passed");
+    }
+    System.out.println("DTLS 1.2 PSK interoperability and public-bootstrap and wrong-identity rejection passed (CCM and CCM-8)");
   }
 }
